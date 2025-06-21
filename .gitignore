@@ -1,0 +1,5 @@
+# .gitignore
+.DS_Store
+environ
+notebooks/.ipynb_checkpoints
+notebooks/*.pickle

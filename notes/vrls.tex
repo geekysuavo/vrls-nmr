@@ -1,0 +1,565 @@
+
+% =============================================================================
+\documentclass{article}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{parskip}
+
+\usepackage{color,soul}
+\newcommand{\fixme}{\hl{\textbf{\emph{Fix me!}}}}
+
+\numberwithin{equation}{section}
+
+% =============================================================================
+\newcommand{\lh}{\mathopen{}\mathclose\bgroup\left}
+\newcommand{\rh}{\aftergroup\egroup\right}
+
+%\newcommand{\kldiv}[2]{%
+% \mathbb{D}_{\text{KL}}\lh\{ #1 \,\middle\|\, #2 \rh\}%
+%}
+
+\newcommand{\entropy}[1]{\mathbb{H}\lh[ #1 \rh]}
+\newcommand{\E}[2]{\mathbb{E}_{#2}\lh[ #1 \rh]}
+\newcommand{\m}[1]{\boldsymbol{#1}}
+
+\newcommand{\NormDist}[2]{\mathcal{N}\lh( #1, #2 \rh)}
+\newcommand{\MVNDist}[3]{\mathcal{N}_{#3}\lh( #1, #2 \rh)}
+\newcommand{\IGDist}[2]{\mathcal{IG}\lh( #1, #2 \rh)}
+\newcommand{\INDist}[2]{\mathcal{IN}\lh( #1, #2 \rh)}
+
+\newcommand{\setQ}{\mathcal{Q}}
+\newcommand{\setR}{\mathcal{R}}
+%\newcommand{\setZ}{\mathcal{Z}}
+
+\DeclareMathOperator{\trace}{tr}
+\DeclareMathOperator{\diag}{diag}
+
+% =============================================================================
+\begin{document}
+
+\title{VRLS for NUS NMR}
+\author{Bradley Worley}
+\maketitle
+
+\begin{abstract}
+Notes on an efficient iteratively reweighted least squares algorithm that
+has been purpose-tuned for active nonuniform sampling of nuclear magnetic
+resonance data.
+\end{abstract}
+
+% =============================================================================
+\section{Notation and definitions}
+\label{s:defs}
+\begin{tabular}{ll}
+ $\NormDist{\mu}{\sigma^2}$ &
+ Univariate normal distribution with mean $\mu$ and variance $\sigma^2$
+\\
+ $\MVNDist{\m{\mu}}{\m{\Sigma}}{d}$ &
+ $d$-variate normal distribution with means $\m{\mu}$ and covariances
+ $\m{\Sigma}$
+\\
+ $\IGDist{\alpha}{\beta}$ &
+ Inverse-gamma distribution with shape $\alpha$ and scale $\beta$
+\\
+ $\INDist{\nu}{\lambda}$ &
+ Inverse Gaussian distribution with mean $\nu$ and shape $\lambda$
+\end{tabular}
+
+A random variable $x \sim \NormDist{\mu}{\sigma^2}$ has density:
+\begin{equation*}
+f_{\mathcal{N}}(x; \mu, \sigma^2) =
+ (2 \pi \sigma^2)^{-\frac{1}{2}}
+ \exp\left\{
+  -\frac{(x - \mu)^2}{2 \sigma^2}
+ \right\}
+\end{equation*}
+
+A random variable $\m{x} \sim \MVNDist{\m{\mu}}{\m{\Sigma}}{d}$
+has density:
+\begin{equation*}
+f_{\mathcal{N}_d}(\m{x}; \m{\mu}, \m{\Sigma}) =
+ (2 \pi)^{-\frac{d}{2}} \det(\m{\Sigma})^{-\frac{1}{2}}
+ \exp\left\{
+  -\frac{1}{2} (\m{x} - \m{\mu})^\top \m{\Sigma}^{-1} (\m{x} - \m{\mu})
+ \right\}
+\end{equation*}
+
+A random variable $x \sim \IGDist{\alpha}{\beta}$ has density:
+\begin{equation*}
+f_{\mathcal{IG}}(x; \alpha, \beta) =
+ \frac{\beta^\alpha}{\Gamma(\alpha)}
+ \lh( x^{-1} \rh)^{\alpha + 1}
+ \exp\left\{ -\beta x^{-1} \right\}
+\end{equation*}
+
+A random variable $x \sim \INDist{\nu}{\lambda}$ has density:
+\begin{equation*}
+f_{\mathcal{IN}}(x; \nu, \lambda) =
+ (2 \pi)^{-\frac{1}{2}}
+ \lambda^{\frac{3}{2}}
+ x^{-\frac{3}{2}}
+ \exp\left\{
+  -\frac{\lambda (x - \nu)^2}{2 \nu^2 x}
+ \right\}
+\end{equation*}
+
+% =============================================================================
+\clearpage
+\section{Base probabilistic construction}
+\label{s:const}
+We begin with the measurement model,
+\begin{equation}
+\m{y} = \m{A} \m{x} + \m{\epsilon}
+\end{equation}
+where $\m{y}, \m{\epsilon} \in \setR^m$, $\m{x} \in \setR^n$, and
+$\m{A} \in \setR^{m \times n}$.
+
+Assuming $\forall j: \epsilon_j \mid \tau \sim \mathcal{N}(0, \tau^{-1})$
+yields the likelihood:
+\begin{equation}
+p(\m{y} \mid \m{x}, \tau) =
+ (2 \pi)^{-\frac{m}{2}} \tau^{\frac{m}{2}}
+ \exp\left\{
+  -\frac{\tau}{2} \| \m{y} - \m{A} \m{x} \|_2^2
+ \right\}
+\end{equation}
+Assuming $\forall i: x_i \mid w_i \sim \mathcal{N}(0, w_i^{-1})$
+yields:
+\begin{equation}
+\begin{aligned}
+p(\m{x} \mid \m{w}) &= \prod_{i=1}^n p(x_i \mid w_i)
+\\
+p(x_i \mid w_i) &=
+ (2 \pi)^{-\frac{1}{2}} w_i^{\frac{1}{2}}
+ \exp\left\{
+  -\frac{1}{2} w_i |x_i|^2
+ \right\}
+\end{aligned}
+\end{equation}
+Assuming $\forall i: w_i \mid \xi \sim \mathcal{IG}(1, \xi/2)$
+yields:
+\begin{equation}
+\begin{aligned}
+p(\m{w} \mid \xi) &= \prod_{i=1}^n p(w_i \mid \xi)
+\\
+p(w_i \mid \xi) &=
+ \frac{\xi}{2} w_i^{-2}
+ \exp\left\{ -\frac{\xi}{2} w_i^{-1} \right\}
+\end{aligned}
+\end{equation}
+Assuming $\xi \sim \mathcal{IG}\lh(n+1/2, \beta_\xi/2\rh)$
+yields:
+\begin{equation}
+p(\xi) =
+ \lh(\frac{\beta_\xi}{2}\rh)^{n+\frac{1}{2}}
+ \Gamma\lh(n+\frac{1}{2}\rh)^{-1}
+ \xi^{-n-\frac{3}{2}}
+ \exp\left\{ -\frac{\beta_\xi}{2} \xi^{-1} \right\}
+\end{equation}
+Assuming $\tau \sim \mathcal{IG}\lh((m+1)/2, \beta_\tau/2\rh)$
+yields:
+\begin{equation}
+p(\tau) =
+ \lh(\frac{\beta_\tau}{2}\rh)^{\frac{m+1}{2}}
+ \Gamma\lh(\frac{m+1}{2}\rh)^{-1}
+ \tau^{-\frac{m+3}{2}}
+ \exp\left\{ -\frac{\beta_\tau}{2} \tau^{-1} \right\}
+\end{equation}
+
+The final joint distribution is given by,
+\begin{equation}
+p(\m{y}, \m{x}, \m{w}, \xi, \tau) =
+ \underbrace{
+  p(\m{y} \mid \m{x}, \tau) \,
+  p(\m{x} \mid \m{w}) \,
+  p(\m{w} \mid \xi)
+ }_{p(\m{y}, \m{x}, \m{w} \mid \xi, \tau)} \,
+ p(\xi) \, p(\tau)
+\end{equation}
+
+% =============================================================================
+\clearpage
+\section{Complete conditionals}
+By examining the complete conditionals of
+$p(\m{x}, \m{y}, \m{w}, \xi, \tau)$ with respect to each
+unknown random variable, we obtain suitable choices for our
+variational approximation $q$, under the factorization
+constraint,
+\begin{equation}
+q(\m{x}, \m{w}, \xi, \tau) = q(\m{x}) \, q(\m{w}) \, q(\xi) \, q(\tau)
+\end{equation}
+
+\subsection{Complete conditional for $\m{x}$}
+\begin{equation}
+p(\m{x} \mid \m{y}, \m{w}, \xi, \tau) \propto
+ \exp\left\{
+  -\frac{\tau}{2} \| \m{y} - \m{A} \m{x} \|_2^2
+  -\frac{1}{2} \sum_{i=1}^n w_i |x_i|^2
+ \right\}
+\end{equation}
+which is $\mathcal{N}_n(\m{\mu}, \m{\Gamma})$ with parameters:
+\begin{equation}
+\begin{aligned}
+\m{\mu} &= \tau \m{\Gamma} \m{A}^\top \m{y}
+\\
+\m{\Gamma} &= \lh( \m{W} + \tau \m{A}^\top \m{A} \rh)^{-1}
+\end{aligned}
+\end{equation}
+
+\subsection{Complete conditional for $\m{w}$}
+\begin{equation}
+p(w_i \mid \m{y}, \m{x}, \m{w}_{-i}, \xi, \tau) \propto
+ w_i^{-\frac{3}{2}}
+ \exp\left\{
+  -\frac{1}{2} w_i |x_i|^2
+  -\frac{\xi}{2} w_i^{-1}
+ \right\}
+\end{equation}
+which is $\mathcal{IN}(\nu_{w,i}, \lambda_{w,i})$ with parameters:
+\begin{equation}
+\begin{aligned}
+\nu_{w,i} &= \sqrt{\frac{\xi}{|x_i|^2}}
+\\
+\lambda_{w,i} &= \xi
+\end{aligned}
+\end{equation}
+
+\subsection{Complete conditional for $\xi$}
+\begin{equation}
+p(\xi \mid \m{y}, \m{x}, \m{w}, \tau) \propto
+ \xi^{-\frac{3}{2}}
+ \exp\left\{
+  -\frac{\xi}{2} \sum_{i=1}^n w_i^{-1}
+  -\frac{\beta_\xi}{2} \xi^{-1}
+ \right\}
+\end{equation}
+which is $\mathcal{IN}(\nu_\xi, \lambda_\xi)$ with parameters:
+\begin{equation}
+\begin{aligned}
+\nu_\xi &= \sqrt{\beta_\xi \lh( \sum_{i=1}^n w_i^{-1} \rh)^{-1}}
+\\
+\lambda_\xi &= \beta_\xi
+\end{aligned}
+\end{equation}
+
+\subsection{Complete conditional for $\tau$}
+\begin{equation}
+p(\tau \mid \m{y}, \m{x}, \m{w}, \xi) \propto
+ \tau^{-\frac{3}{2}}
+ \exp\left\{
+  -\frac{\tau}{2} \| \m{y} - \m{A} \m{x} \|_2^2
+  -\frac{\beta_\tau}{2} \tau^{-1}
+ \right\}
+\end{equation}
+which is $\mathcal{IN}(\nu_\tau, \lambda_\tau)$ with parameters,
+\begin{equation}
+\begin{aligned}
+\nu_\tau &= \sqrt{\beta_\tau \lh( \| \m{y} - \m{A} \m{x} \|_2^2 \rh)^{-1}}
+\\
+\lambda_\tau &= \beta_\tau
+\end{aligned}
+\end{equation}
+
+
+% =============================================================================
+\clearpage
+\section{VRLS}
+Define the optimization problem as follows:
+\begin{equation}
+\underset{\m{\eta}}{\text{minimize}} \; F(\m{\eta})
+\end{equation}
+where $F$ is the $(\m{\lambda_w},\lambda_\xi,\lambda_\tau)$-minimized
+variational free energy,
+\begin{equation}
+\begin{aligned}
+F(\m{\eta}) &=
+ \underset{\m{\lambda_w},\lambda_\xi,\lambda_\tau}{\inf}\left\{
+ -\E{\ln p(\m{y}, \m{x}, \m{w}, \xi, \tau)}{q(\m{x}, \m{w}, \xi, \tau)}
+ -\entropy{q(\m{x}, \m{w}, \xi, \tau)}
+ \right\}
+\\ &=
+  \frac{\nu_\tau}{2} \| \m{y} - \m{A} \m{\mu} \|_2^2
+ +\frac{\nu_\tau}{2} \trace(\m{A}^\top \m{A} \m{\Gamma})
+ -\frac{1}{2} \ln\det(\m{\Gamma})
+\\ &\quad
+ +\frac{1}{2} \sum_{i=1}^n \nu_{w,i} \lh( |\mu_i|^2 + \Gamma_{ii} \rh)
+ +\frac{\nu_\xi}{2} \sum_{i=1}^n \nu_{w,i}^{-1}
+\\ &\quad
+ +\frac{\beta_\xi}{2} \nu_\xi^{-1}
+ +\frac{\beta_\tau}{2} \nu_\tau^{-1}
+\end{aligned}
+\end{equation}
+and $\m{\eta} = \{\m{\mu}, \m{\Gamma}, \m{\nu_w}, \nu_\xi, \nu_\tau \}$
+denotes the set of nontrivial variational parameters.
+
+\subsection{Additional definitions}
+Let $\m{V} : V_{ij} = \delta(i-j) \nu_{w,i}$ denote a diagonal matrix
+containing $\m{\nu_w}$.
+
+The sensing matrix $\m{A} = \m{B} \m{\Phi}$ has \emph{partial Fourier}
+structure, where $\m{B}$ is a matrix containing $m$ rows of the identity
+matrix $\m{I}_{n \times n}$ and $\m{\Phi}$ is the inverse discrete Fourier
+transform matrix.
+
+The matrix $\m{B}^\top \m{B}$ is diagonal, and the matrix
+$\m{A}^\top \m{A} = \m{\Phi}^\top \m{B}^\top \m{B} \m{\Phi}$
+is circulant.
+
+\subsection{Direct updates to $\m{\Gamma}$}
+Setting the $\m{\Gamma}$-gradient of $F$ to zero yields,
+\begin{equation}
+\begin{aligned}
+\nabla_{\m{\Gamma}} F(\m{\eta}) &=
+ \frac{\nu_\tau}{2} \m{A}^\top \m{A} - \frac{1}{2} \m{\Gamma}^{-1} +
+ \frac{1}{2} \m{V}
+\\ \implies
+\m{\Gamma} &=
+ \lh( \m{V} + \nu_\tau \m{A}^\top \m{A} \rh)^{-1}
+\end{aligned}
+\end{equation}
+
+\subsection{Direct updates to $\m{\mu}$}
+Setting the $\m{\mu}$-gradient of $F$ equal to zero yields,
+\begin{equation}
+\begin{aligned}
+\nabla_{\m{\mu}} F(\m{\eta}) &=
+ \nu_\tau \m{A}^\top \m{A} \m{\mu} - \nu_\tau \m{A}^\top \m{y}
+ + \m{V} \m{\mu}
+\\ \implies
+\m{\mu} &=
+ \nu_\tau \lh(
+  \m{V} + \nu_\tau \m{A}^\top \m{A}
+ \rh)^{-1} \m{A}^\top \m{y}
+=
+ \nu_\tau \m{\Gamma} \m{A}^\top \m{y}
+\end{aligned}
+\end{equation}
+
+\subsection{Updates to $\m{\nu_w}$}
+Setting the $\m{\nu_w}$-gradient of $F$ to zero yields,
+\begin{equation}
+\begin{aligned}
+\forall i : \partial_{\nu_{w,i}} F(\m{\eta}) &=
+ \frac{1}{2} \lh( |\mu_i|^2 + \Gamma_{ii} \rh) -
+ \frac{\nu_\xi}{2} \nu_{w,i}^{-2}
+\\ \implies
+\nu_{w,i} &=
+ \sqrt{\nu_\xi \lh( |\mu_i|^2 + \Gamma_{ii} \rh)^{-1}}
+\end{aligned}
+\end{equation}
+
+\subsection{Updates to $\nu_\tau$}
+Minimizing $F$ with respect to $\nu_\tau$ yields,
+\begin{equation}
+\begin{aligned}
+\partial_{\nu_\tau} F(\m{\eta}) &=
+ \frac{1}{2} \| \m{y} - \m{A} \m{\mu} \|_2^2 +
+ \frac{1}{2} \trace(\m{A}^\top \m{A} \m{\Gamma}) -
+ \frac{\beta_\tau}{2} \nu_\tau^{-2}
+\\ \implies
+\nu_\tau &=
+ \sqrt{\beta_\tau \lh(
+  \| \m{y} - \m{A} \m{\mu} \|_2^2 +
+  \trace(\m{A}^\top \m{A} \m{\Gamma})
+ \rh)^{-1}}
+\end{aligned}
+\end{equation}
+
+\subsection{Updates to $\nu_\xi$}
+Minimizing $F$ with respect to $\nu_\xi$ yields,
+\begin{equation}
+\begin{aligned}
+\partial_{\nu_\xi} F(\m{\eta}) &=
+ \frac{1}{2} \sum_{i=1}^n \nu_{w,i}^{-1} - \frac{\beta_\xi}{2} \nu_\xi^{-2}
+\\ \implies
+\nu_\xi &=
+ \sqrt{\beta_\xi \lh( \sum_{i=1}^n \nu_{w,i}^{-1} \rh)^{-1}}
+\end{aligned}
+\end{equation}
+
+\subsection{Algorithmic simplifications}
+Storing and directly inverting a complete copy of $\m{\Gamma}$ is
+prohibitively expensive, so we pursue efficient methods of computing:
+\begin{itemize}
+\item The trace term, $\trace(\m{A}^\top \m{A} \m{\Gamma})$
+\item The log-determinant term, $\ln\det\m{\Gamma}$
+\item The frequency-domain marginal variances,
+ $\Gamma_{ii} = \m{e}_i^\top \m{\Gamma} \m{e}_i$
+\item The time-domain marginal variances,
+ $s_i = \m{e}_i^\top \m{\Phi} \m{\Gamma} \m{\Phi}^\top \m{e}_i$
+\end{itemize}
+
+\subsubsection{Simplification of the covariance matrix}
+We apply the Woodbury identity to $\m{\Gamma}$ to obtain
+\begin{equation}
+\begin{aligned}
+\m{\Gamma} &= \lh( \m{V} + \nu_\tau \m{A}^\top \m{A} \rh)^{-1}
+\\ &=
+ \m{V}^{-1} - \m{V}^{-1} \m{A}^\top \lh(
+  \nu_\tau^{-1} \m{I} + \m{A} \m{V}^{-1} \m{A}^\top
+ \rh)^{-1} \m{A} \m{V}^{-1}
+\\ &=
+ \m{V}^{-1} - \m{V}^{-1} \m{A}^\top \m{K}^{-1} \m{A} \m{V}^{-1}
+\end{aligned}
+\end{equation}
+where we have defined the $m \times m$ ``kernel'' matrix
+\begin{equation}
+\begin{aligned}
+\m{K} &= \nu_\tau^{-1} \m{I} + \m{A} \m{V}^{-1} \m{A}^\top
+\\ &=
+ \nu_\tau^{-1} \m{I} + \m{B} \m{\Phi} \m{V}^{-1} \m{\Phi}^\top \m{B}^\top
+\\ &=
+ \nu_\tau^{-1} \m{I} + \m{B} \m{C} \m{B}^\top
+\end{aligned}
+\end{equation}
+where we have also defined the \emph{circulant} matrix
+$\m{C} = \m{\Phi} \m{V}^{-1} \m{\Phi}^\top$. Because $\m{C}$ is
+circulant and  $\m{B} (\dots) \m{B}^\top$ is a row- and column-wise
+selection operation, the kernel matrix $\m{K}$ is cheap to construct
+from the elements of $\m{\nu_w}$.
+
+\subsubsection{Simplification of the trace term}
+Substituting the definition of $\m{A}$ and using the circular shift
+invariance of the trace, we obtain
+\begin{equation}
+\begin{aligned}
+\trace(\m{A}^\top \m{A} \m{\Gamma}) &=
+ \trace( \m{\Phi}^\top \m{B}^\top \m{B} \m{\Phi} \m{\Gamma} )
+\\ &=
+ \trace( \m{B}^\top \m{B} \m{\Phi} \m{\Gamma} \m{\Phi}^\top )
+\end{aligned}
+\end{equation}
+Because $\m{B}^\top \m{B}$ is diagonal, we may define
+$\m{b} = \diag(\m{B}^\top \m{B})$ and re-use the time-domain
+marginals $\m{s}$ to obtain a final simplification,
+\begin{equation}
+\trace(\m{A}^\top \m{A} \m{\Gamma}) = \m{b}^\top \m{s}
+\end{equation}
+
+\subsubsection{Simplification of the log-determinant term}
+Using the matrix determinant lemma, we obtain
+\begin{equation}
+\begin{aligned}
+-\ln\det(\m{\Gamma}) &=
+ \ln\det( \m{V} + \nu_\tau \m{A}^\top \m{A} )
+\\ &=
+ \ln\det(\nu_\tau^{-1} \m{I} + \m{A} \m{V}^{-1} \m{A}^\top)
+ + \ln\det(\nu_\tau \m{I}) + \ln\det(\m{V})
+\\ &=
+ \ln\det(\m{K}) + \sum_{i=1}^n \ln \nu_{w,i} + n\ln\nu_\tau
+\end{aligned}
+\end{equation}
+which appears to be the simplest form we can get to.
+
+\subsubsection{Simplification of frequency-domain marginals}
+The weight updates require knowledge of the marginal variances $\Gamma_{ii}$.
+We return once more to the Woodbury identity,
+\begin{equation}
+\m{\Gamma} =
+ \m{V}^{-1} - \m{V}^{-1} \m{A}^\top \m{K}^{-1} \m{A} \m{V}^{-1}
+\end{equation}
+and examine the diagonal elements,
+\begin{equation}
+\begin{aligned}
+\Gamma_{ii} &=
+ \m{e}_i^\top \m{V}^{-1} \m{e}_i
+ - \m{e}_i^\top \m{V}^{-1} \m{\Phi}^\top \m{B}^\top \m{K}^{-1}
+   \m{B} \m{\Phi} \m{V}^{-1} \m{e}_i
+\\ &=
+ \nu_{w,i}^{-1}
+ - \nu_{w,i}^{-2} \m{e}_i^\top \m{\Phi}^\top \m{B}^\top \m{K}^{-1}
+   \m{B} \m{\Phi} \m{e}_i
+\\ &=
+ \nu_{w,i}^{-1} - \nu_{w,i}^{-2} \m{\alpha}_i^\top \m{K}^{-1} \m{\alpha}_i
+\end{aligned}
+\end{equation}
+where $\m{\alpha}_i = \m{B} \m{\Phi} \m{e}_i$. Like $\m{\beta}_i$,
+these vectors are efficiently computable:
+\begin{enumerate}
+\item Select column $i$ from the inverse DFT matrix $\m{\Phi}$
+\item Select the $m$ measured indices from this vector
+\end{enumerate}
+
+\subsubsection{Simplification of time-domain marginals}
+Doing the same for the time-domain covariance exposes an interesting pattern,
+\begin{equation}
+\begin{aligned}
+\m{\Phi} \m{\Gamma} \m{\Phi}^\top &=
+ \m{\Phi} \m{V}^{-1} \m{\Phi}^\top
+ - \m{\Phi} \m{V}^{-1} \m{\Phi}^\top \m{B}^\top
+   \m{K}^{-1} \m{B} \m{\Phi} \m{V}^{-1} \m{\Phi}^\top
+\\ &=
+ \m{C} - \m{C} \m{B}^\top \m{K}^{-1} \m{B} \m{C}
+\end{aligned}
+\end{equation}
+The diagonal elements $\m{s}$ of this matrix are given by
+\begin{equation}
+\begin{aligned}
+s_i &= \m{e}_i^\top \m{\Phi} \m{\Gamma} \m{\Phi}^\top \m{e}_i
+\\ &=
+ c_1 - \m{e}_i^\top \m{C} \m{B}^\top \m{K}^{-1} \m{B} \m{C} \m{e}_i
+\\ &=
+ c_1 - \m{\beta}_i^\top \m{K}^{-1} \m{\beta}_i
+\end{aligned}
+\end{equation}
+where $c_1 = n^{-1} \sum_{i=1}^n \nu_{w,i}^{-1}$ is the value along
+the diagonal of $\m{C}$, and $\m{\beta}_i = \m{B} \m{C} \m{e}_i$ is the
+row-subsample of column $i$ of $\m{C}$, which is computable by,
+\begin{enumerate}
+\item Compute the circulant coefficients,
+  $\m{c} = \m{\Phi} \m{\nu}_{\m{w}}^{-1}$
+\item Apply a circular shift of $i-1$ to the vector $\m{c}$
+\item Select the $m$ measured indices from the shifted vector.
+\end{enumerate}
+
+\subsubsection{Simplification of updates to $\m{\mu}$}
+We apply the Woodbury identity to the direct mean update,
+\begin{equation}
+\begin{aligned}
+\m{\mu} &=
+ \nu_\tau \m{\Gamma} \m{A}^\top \m{y}
+\\ &=
+ \nu_\tau \lh( \m{V} + \nu_\tau \m{A}^\top \m{A} \rh)^{-1}
+ \m{A}^\top \m{y}
+\\ &=
+ \nu_\tau \lh(
+  \m{V}^{-1} - \m{V}^{-1} \m{A}^\top \m{K}^{-1} \m{A} \m{V}^{-1}
+ \rh) \m{A}^\top \m{y}
+\\ &=
+ \nu_\tau \lh(
+  \m{V}^{-1} \m{A}^\top
+  - \m{V}^{-1} \m{A}^\top \m{K}^{-1} \m{A} \m{V}^{-1} \m{A}^\top
+ \rh) \m{y}
+\\ &=
+ \nu_\tau \m{V}^{-1} \m{A}^\top \lh(
+  \m{I} - \m{K}^{-1} \m{A} \m{V}^{-1} \m{A}^\top
+ \rh) \m{y}
+\end{aligned}
+\end{equation}
+Focusing for a moment on the inner $m \times m$ matrix,
+\begin{equation}
+\begin{aligned}
+&\quad \m{I} - \m{K}^{-1} \m{A} \m{V}^{-1} \m{A}^\top
+\\ &=
+ \m{I} + \nu_\tau^{-1} \m{K}^{-1}
+ - \nu_\tau^{-1} \m{K}^{-1} - \m{K}^{-1} \m{A} \m{V}^{-1} \m{A}^\top
+\\ &=
+ \m{I} + \nu_\tau^{-1} \m{K}^{-1}
+ - \m{K}^{-1} \lh( \nu_\tau^{-1} \m{I} + \m{A} \m{V}^{-1} \m{A}^\top \rh)
+\\ &=
+ \m{I} + \nu_\tau^{-1} \m{K}^{-1} - \m{K}^{-1} \m{K}
+\\ &=
+ \m{I} + \nu_\tau^{-1} \m{K}^{-1} - \m{I}
+\\ &=
+ \nu_\tau^{-1} \m{K}^{-1}
+\end{aligned}
+\end{equation}
+Finally, we substitute this equation back into $\m{\mu}$ to obtain
+\begin{equation}
+\m{\mu} = \m{V}^{-1} \m{A}^\top \m{K}^{-1} \m{y}
+\end{equation}
+
+% =============================================================================
+\end{document}
