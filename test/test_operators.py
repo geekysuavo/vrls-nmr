@@ -5,7 +5,7 @@ import pytest
 import torch
 from torch import Tensor
 
-import vrlsnmr
+import vrlsnmr.operators as op
 
 
 @pytest.fixture(params=("10x100", "50x100", "20x80"))
@@ -57,7 +57,7 @@ def test_kernel(matrices, tau):
     Winv = w.reciprocal().diag().cfloat()
     Kref = torch.eye(m, device=device) / tau + A @ Winv @ A.t().conj()
 
-    K = vrlsnmr.kernel(w, ids, tau)
+    K = op.kernel(w, ids, tau)
 
     torch.testing.assert_close(Kref, K)
 
@@ -75,7 +75,7 @@ def test_xmarginal(matrices, tau):
     Kref = torch.eye(m, device=device) / tau + A @ Winv @ A.t().conj()
     Kinv = torch.linalg.inv(Kref)
 
-    g = vrlsnmr.xmarginal(Kinv, w, ids)
+    g = op.xmarginal(Kinv, w, ids)
 
     torch.testing.assert_close(gref, g)
 
@@ -95,6 +95,6 @@ def test_ymarginal(matrices, tau):
     Kref = torch.eye(m, device=device) / tau + A @ Winv @ A.t().conj()
     Kinv = torch.linalg.inv(Kref)
 
-    s = vrlsnmr.ymarginal(Kinv, w, ids)
+    s = op.ymarginal(Kinv, w, ids)
 
     torch.testing.assert_close(sref, s)

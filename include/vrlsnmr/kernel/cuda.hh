@@ -38,9 +38,9 @@ __global__ void kernel_forward(
  * tau: ()
  */
 torch::Tensor kernel(
-  torch::Tensor weights,
-  torch::Tensor ids,
-  torch::Tensor tau
+  const torch::Tensor& weights,
+  const torch::Tensor& ids,
+  const torch::Tensor& tau
 ) {
   using cfloat = c10::complex<float>;
 

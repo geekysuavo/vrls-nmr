@@ -39,9 +39,9 @@ __global__ void xmarginal_forward(
  * ids: (m,)
  */
 torch::Tensor xmarginal(
-  torch::Tensor kernel_inv,
-  torch::Tensor weights,
-  torch::Tensor ids
+  const torch::Tensor& kernel_inv,
+  const torch::Tensor& weights,
+  const torch::Tensor& ids
 ) {
   using cfloat = c10::complex<float>;
 
