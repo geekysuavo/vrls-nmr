@@ -2,39 +2,64 @@
 
 namespace vrlsnmr::cpu {
 
-/* weights: (n,)
+namespace impl {
+
+template<typename scalar_t>
+void kernel(
+  const accessor_t<c10::complex<scalar_t>, 2> coeffs,
+  const accessor_t<scalar_t, 1> tau,
+  const accessor_t<int64_t, 1> ids,
+  accessor_t<c10::complex<scalar_t>, 3> out
+) {
+  const int64_t bs = coeffs.size(/*dim=*/0);
+  const int64_t n = coeffs.size(/*dim=*/1);
+  const int64_t m = ids.size(/*dim=*/0);
+
+  #pragma omp parallel for
+  for (int64_t b = 0; b < bs; ++b) {
+    for (int64_t i = 0; i < m; ++i) {
+      out[b][i][i] = coeffs[b][0] + 1 / tau[b];
+
+      for (int64_t j = i + 1; j < m; ++j) {
+        const auto k = n + ids[i] - ids[j];
+        const auto Kij = coeffs[b][k];
+
+        out[b][i][j] = Kij;
+        out[b][j][i] = std::conj(Kij);
+      }
+    }
+  }
+}
+
+} /* namespace vrlsnmr::cpu::impl */
+
+/* weights: (bs, n)
+ * tau: (bs,)
  * ids: (m,)
- * tau: ()
+ * out => (bs, m, m)
  */
 torch::Tensor kernel(
   const torch::Tensor& weights,
-  const torch::Tensor& ids,
-  const torch::Tensor& tau
+  const torch::Tensor& tau,
+  const torch::Tensor& ids
 ) {
-  using cfloat = c10::complex<float>;
-
-  const int64_t n = weights.size(/*dim=*/0);
+  const int64_t bs = weights.size(/*dim=*/0);
+  const int64_t n = weights.size(/*dim=*/1);
   const int64_t m = ids.size(/*dim=*/0);
 
   const auto coeffs = torch::fft::fft(weights.reciprocal()).conj() / n;
-  const auto tau_inv = tau.reciprocal().item<float>();
+  auto out = torch::empty({bs, m, m}, /*options=*/coeffs.options());
 
-  auto out = torch::empty({m, m}, /*options=*/coeffs.options());
-  const auto coeffs_accessor = coeffs.accessor<cfloat, 1>();
-  const auto ids_accessor = ids.accessor<int64_t, 1>();
-  auto out_accessor = out.accessor<cfloat, 2>();
-
-  for (int64_t i = 0; i < m; ++i) {
-    out_accessor[i][i] = coeffs_accessor[0] + tau_inv;
-
-    for (int64_t j = i + 1; j < m; ++j) {
-      const auto k = n + ids_accessor[i] - ids_accessor[j];
-      const auto Kij = coeffs_accessor[k];
-
-      out_accessor[i][j] = Kij;
-      out_accessor[j][i] = std::conj(Kij);
-    }
-  }
+  AT_DISPATCH_FLOATING_TYPES(
+    weights.scalar_type(),
+    "kernel", ([&] {
+      impl::kernel<scalar_t>(
+        access_as<c10::complex<scalar_t>, 2>(coeffs),
+        access_as<scalar_t, 1>(tau),
+        access_as<int64_t, 1>(ids),
+        access_as<c10::complex<scalar_t>, 3>(out)
+      );
+  }));
 
   return out;
 }

@@ -2,64 +2,74 @@
 
 namespace vrlsnmr::cuda {
 
+namespace impl {
+
 template<typename scalar_t>
-__global__ void kernel_forward(
-  const scalar_t* tau_ptr,
-  const accessor_t<c10::complex<scalar_t>, 1> coeffs,
+__global__ void kernel(
+  const accessor_t<c10::complex<scalar_t>, 2> coeffs,
+  const accessor_t<scalar_t, 1> tau,
   const accessor_t<int64_t, 1> ids,
-  accessor_t<c10::complex<scalar_t>, 2> out
+  accessor_t<c10::complex<scalar_t>, 3> out
 ) {
-  const int m = out.size(/*dim=*/0);
-  const int n = coeffs.size(/*dim=*/0);
+  const int bs = coeffs.size(/*dim=*/0);
+  const int n = coeffs.size(/*dim=*/1);
+  const int m = ids.size(/*dim=*/0);
 
-  const int ij = blockIdx.x * blockDim.x + threadIdx.x;
+  const int b = blockIdx.x * blockDim.x + threadIdx.x;
+  const int ij = blockIdx.y * blockDim.y + threadIdx.y;
 
-  if (ij < m * m) {
+  if (b < bs && ij < m * m) {
     const int i = ij / m;
     const int j = ij - i * m;
 
-    const scalar_t tau_inv = 1 / *tau_ptr;
-
     if (i == j) {
-      out[i][j] = coeffs[0] + tau_inv;
+      out[b][i][j] = coeffs[b][0] + 1 / tau[b];
     }
     else if (i < j) {
       const int k = n + ids[i] - ids[j];
-      const auto Kij = coeffs[k];
+      const auto Kij = coeffs[b][k];
 
-      out[i][j] = Kij;
-      out[j][i] = std::conj(Kij);
+      out[b][i][j] = Kij;
+      out[b][j][i] = std::conj(Kij);
     }
   }
 }
 
-/* weights: (n,)
+} /* namespace vrlsnmr::cuda::impl */
+
+/* weights: (bs, n)
+ * tau: (bs,)
  * ids: (m,)
- * tau: ()
+ * out => (bs, m, m)
  */
 torch::Tensor kernel(
   const torch::Tensor& weights,
-  const torch::Tensor& ids,
-  const torch::Tensor& tau
+  const torch::Tensor& tau,
+  const torch::Tensor& ids
 ) {
-  using cfloat = c10::complex<float>;
-
-  const int64_t n = weights.size(/*dim=*/0);
+  const int64_t bs = weights.size(/*dim=*/0);
+  const int64_t n = weights.size(/*dim=*/1);
   const int64_t m = ids.size(/*dim=*/0);
 
   const auto coeffs = torch::fft::fft(weights.reciprocal()).conj() / n;
+  auto out = torch::empty({bs, m, m}, /*options=*/coeffs.options());
 
-  auto out = torch::empty({m, m}, /*options=*/coeffs.options());
-
-  const int threads = 1024;
-  const dim3 blocks((m * m + threads - 1) / threads);
-
-  kernel_forward<float><<<blocks, threads>>>(
-    tau.data_ptr<float>(),
-    access_as<cfloat, 1>(coeffs),
-    access_as<int64_t, 1>(ids),
-    access_as<cfloat, 2>(out)
+  const dim3 threads(32, 32);
+  const dim3 blocks(
+    (bs + threads.x - 1) / threads.x,
+    (m * m + threads.y - 1) / threads.y
   );
+
+  AT_DISPATCH_FLOATING_TYPES(
+    weights.scalar_type(),
+    "kernel", ([&] {
+    impl::kernel<scalar_t><<<blocks, threads>>>(
+      access_as<c10::complex<scalar_t>, 2>(coeffs),
+      access_as<scalar_t, 1>(tau),
+      access_as<int64_t, 1>(ids),
+      access_as<c10::complex<scalar_t>, 3>(out)
+    );
+  }));
 
   return out;
 }

@@ -10,6 +10,7 @@ ext = CUDAExtension(
         "src/impl-cpu.cc",
         "src/impl-cuda.cu",
     ],
+    extra_compile_args={"cxx": ["-fopenmp"]},
 )
 
 build_ext = BuildExtension.with_options(
