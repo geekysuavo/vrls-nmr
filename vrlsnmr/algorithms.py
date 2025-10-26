@@ -112,6 +112,7 @@ def vrls_ex(
         mu = torch.fft.fft(mu, norm="ortho") / nu_w
 
         Gamma_diag = op.xmarginal(Kinv, nu_w, ids)
+        Sigma_diag = op.ymarginal(Kinv, nu_w, ids)
 
         m2 = mu.abs().square() + Gamma_diag
         nu_w = (nu_xi.unsqueeze(dim=-1) / (m2 + eps)).sqrt()
@@ -120,7 +121,73 @@ def vrls_ex(
 
         yhat = torch.fft.ifft(mu, norm="ortho")[:, ids]
         err = (y - yhat).abs().square().sum(dim=-1)
-        ess = err + Gamma_diag[:, ids].sum(dim=-1) / n
+        ess = err + Sigma_diag[:, ids].sum(dim=-1) / n
         nu_tau = (beta_tau / ess).sqrt()
 
     return (mu, Gamma_diag)
+
+
+@torch.inference_mode()
+def vrls_mf(
+    y: Tensor,
+    ids: Tensor,
+    tau: float,
+    xi: float,
+    n: int,
+    niter: int,
+    eps: float = 1.0e-9,
+) -> tuple[Tensor, Tensor]:
+    """
+    Fast mean-field VRLS.
+
+    Args:
+        y: :math:`(b, m)`, Measurements (complex).
+        ids: :math:`(m)`, Measurement indices.
+        tau: Fixed noise precision.
+        xi: Fixed weight scale.
+        n: Sparse dimension size.
+        niter: Number of iterations.
+        eps: Weight update positivity parameter.
+
+    Returns:
+        A :class:`tuple` containing
+
+        - :math:`(b, n)`, Sparse mean (complex).
+        - :math:`(b, n)`, Sparse variance (real, positive).
+    """
+    device = y.device
+    complex_dtype = y.dtype
+    real_dtype = y.dtype.to_real()
+
+    if y.ndim == 1:
+        y = y.unsqueeze(dim=0)
+
+    bs = y.size(dim=0)
+    m = ids.size(dim=0)
+
+    w = torch.ones((bs, n), dtype=real_dtype, device=device)
+    mu = torch.zeros((bs, n), dtype=complex_dtype, device=device)
+    gamma = torch.ones((bs, n), dtype=real_dtype, device=device)
+
+    mask = torch.zeros((n,), dtype=torch.bool, device=device)
+    mask[ids] = True
+
+    AtA_diag = m / n
+    L = 1
+
+    for _ in range(niter):
+        m2 = mu.abs().square() + gamma
+        w = (xi / (m2 + eps)).sqrt()
+
+        delta = torch.fft.ifft(mu, norm="ortho")
+        delta[:, ~mask] = 0
+        delta[:, mask] -= y
+        delta = torch.fft.fft(delta, norm="ortho")
+        delta = (L / 2) * mu - delta
+
+        D_diag = tau / 2 + w
+        mu = tau * D_diag.reciprocal() * delta
+
+        gamma = (tau * AtA_diag + w).reciprocal()
+
+    return (mu, gamma)

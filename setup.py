@@ -1,10 +1,14 @@
+import pybind11
 from setuptools import find_packages, setup
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 
 ext = CUDAExtension(
     name="vrlsnmr._ops",
     language="c++",
-    include_dirs=["include"],
+    include_dirs=[
+        "include",
+        pybind11.get_include(),
+    ],
     sources=[
         "src/lib.cc",
         "src/impl-cpu.cc",

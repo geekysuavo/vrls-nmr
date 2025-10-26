@@ -61,12 +61,13 @@ def _(beta_tau, beta_xi, ids, m, n, ops, plt, torch, x0, y):
         mu[:, ids] = (Kinv @ y.unsqueeze(dim=-1)).squeeze(dim=-1)
         mu = torch.fft.fft(mu, norm="ortho") / nu_w
         Gamma_diag = ops.xmarginal(Kinv, nu_w, ids)
+        Sigma_diag = ops.ymarginal(Kinv, nu_w, ids)
         m2 = mu.abs().square() + Gamma_diag
         nu_w = (nu_xi / (m2 + 1e-09)).sqrt()
         nu_xi = (beta_xi / nu_w.reciprocal().sum(dim=-1)).sqrt()
         yhat = torch.fft.ifft(mu, norm="ortho")[:, ids]
         err = (by - yhat).abs().square().sum(dim=-1)
-        ess = err + Gamma_diag[:, ids].sum(dim=-1) / n
+        ess = err + Sigma_diag[:, ids].sum(dim=-1) / n
         nu_tau = (beta_tau / ess).sqrt()
 
     plt.plot(mu[0].real)
