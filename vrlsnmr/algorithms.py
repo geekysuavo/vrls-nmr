@@ -114,13 +114,13 @@ def vrls_ex(
         Gamma_diag = op.xmarginal(Kinv, nu_w, ids)
 
         m2 = mu.abs().square() + Gamma_diag
-        nu_w = (nu_xi / (m2 + eps)).sqrt()
+        nu_w = (nu_xi.unsqueeze(dim=-1) / (m2 + eps)).sqrt()
 
-        nu_xi = (beta_xi / nu_w.reciprocal().sum()).sqrt()
+        nu_xi = (beta_xi / nu_w.reciprocal().sum(dim=-1)).sqrt()
 
-        yhat = torch.fft.ifft(mu, norm="ortho")
-        err = (y - yhat).abs().square().sum()
-        ess = err + Gamma_diag[:, ids].sum() / n
+        yhat = torch.fft.ifft(mu, norm="ortho")[:, ids]
+        err = (y - yhat).abs().square().sum(dim=-1)
+        ess = err + Gamma_diag[:, ids].sum(dim=-1) / n
         nu_tau = (beta_tau / ess).sqrt()
 
     return (mu, Gamma_diag)

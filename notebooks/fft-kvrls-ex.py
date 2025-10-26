@@ -35,46 +35,60 @@ def _(instance):
     k, m, n, stdev = (instance.k, instance.m, instance.n, instance.stdev)
     A, x0, noise, y = (instance.A, instance.x0, instance.noise, instance.y)
     B, Phi, ids = (instance.B, instance.Phi, instance.ids)
-    return Phi, ids, n, stdev, x0, y
+    return Phi, ids, m, n, x0, y
 
 
 @app.cell
-def _(stdev, torch):
-    tau = torch.full((1,), 1 / stdev**2)  # noise is known
-    xi = 1e4
-    return tau, xi
+def _():
+    beta_tau = 1e6
+    beta_xi = 1e6
+    return beta_tau, beta_xi
 
 
 @app.cell
-def _(ids, n, ops, plt, tau, torch, x0, xi, y):
+def _(beta_tau, beta_xi, ids, m, n, ops, plt, torch, x0, y):
     mu = torch.zeros(1, n).cfloat()
-    w = torch.ones(1, n)
+    nu_w = torch.ones(1, n)
+    nu_tau = torch.ones(1)
+    nu_xi = torch.ones(1)
+
+    by = y.view(1, m)
 
     for _ in range(10):
-        K = ops.kernel(w, tau, ids)
+        K = ops.kernel(nu_w, nu_tau, ids)
         Kinv = torch.linalg.inv(K)
         mu.mul_(0)
         mu[:, ids] = (Kinv @ y.unsqueeze(dim=-1)).squeeze(dim=-1)
-        mu = torch.fft.fft(mu, norm="ortho") / w
-        Gamma_diag = ops.xmarginal(Kinv, w, ids)
+        mu = torch.fft.fft(mu, norm="ortho") / nu_w
+        Gamma_diag = ops.xmarginal(Kinv, nu_w, ids)
         m2 = mu.abs().square() + Gamma_diag
-        w = (xi / (m2 + 1e-09)).sqrt()
+        nu_w = (nu_xi / (m2 + 1e-09)).sqrt()
+        nu_xi = (beta_xi / nu_w.reciprocal().sum(dim=-1)).sqrt()
+        yhat = torch.fft.ifft(mu, norm="ortho")[:, ids]
+        err = (by - yhat).abs().square().sum(dim=-1)
+        ess = err + Gamma_diag[:, ids].sum(dim=-1) / n
+        nu_tau = (beta_tau / ess).sqrt()
 
     plt.plot(mu[0].real)
     plt.plot(x0.real)
-    return Kinv, mu, w
+    return Kinv, mu, nu_w
 
 
 @app.cell
-def _(Kinv, Phi, ids, instance, mu, n, ops, plt, torch, w):
+def _(Kinv, Phi, ids, instance, mu, n, nu_w, ops, plt, torch):
     #plt.plot((Phi @ Gamma @ Phi.t().conj()).diag().real);
     t = torch.arange(n)
-    yhat = (Phi @ mu.unsqueeze(dim=-1)).squeeze(dim=-1).imag[0]
-    s = ops.ymarginal(Kinv, w, ids)[0]
+    yhat_real = (Phi @ mu.unsqueeze(dim=-1)).squeeze(dim=-1).real[0]
+    s = ops.ymarginal(Kinv, nu_w, ids)[0]
     width = 1000.0
-    plt.fill_between(t, y1=yhat + width * s, y2=yhat - width * s, alpha=0.2)
-    plt.plot(yhat)
-    plt.scatter(instance.ids, instance.y.imag)
+    plt.fill_between(
+        t,
+        y1=yhat_real + width * s,
+        y2=yhat_real - width * s,
+        alpha=0.2,
+    )
+    plt.plot(yhat_real)
+    plt.scatter(instance.ids, instance.y.real)
     return
 
 
