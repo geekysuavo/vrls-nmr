@@ -1,5 +1,5 @@
 # .gitignore
 .DS_Store
 environ
-notebooks/.ipynb_checkpoints
+notebooks/__marimo__
 notebooks/*.pickle
