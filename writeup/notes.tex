@@ -561,5 +561,56 @@ Finally, we substitute this equation back into $\m{\mu}$ to obtain
 \m{\mu} = \m{V}^{-1} \m{A}^\top \m{K}^{-1} \m{y}
 \end{equation}
 
+\subsection{Fast mean-field updates}
+\subsubsection{Updates to $\m{\mu}$}
+Here we consider the fast mean-field alternative to VRLS where $\m{\gamma}$
+replaces $\m{\Gamma}$.
+
+We begin by bounding the error term in $F(\m{\eta})$,
+\begin{equation}
+\| \m{y} - \m{A} \m{\mu} \|_2^2 \le
+ \| \m{y} - \m{A} \m{z} \|_2^2
+ + 2 (\m{\mu} - \m{z})^\top \m{A}^\top (\m{A} \m{z} - \m{y})
+ + \frac{L}{2} \| \m{\mu} - \m{z} \|_2^2
+\end{equation}
+
+After substituting this bound into $F(\m{\eta})$ to obtain a new
+function $\hat F(\m{\eta})$,
+\begin{equation}
+\begin{aligned}
+\hat F(\m{\eta}) &=
+ \nu_\tau (\m{\mu} - \m{z})^\top \m{A}^\top (\m{A} \m{z} - \m{y})
+ + \frac{L \nu_\tau}{4} \| \m{\mu} - \m{z} \|_2^2
+\\
+ &+ \frac{1}{2} \sum_{i=1}^n \nu_{w,i} \lh( |\mu_i|^2 + \Gamma_{ii} \rh)
+\end{aligned}
+\end{equation}
+
+Setting the $\m{\mu}$-gradient of $\hat F$ equal to zero yields,
+\begin{equation}
+\begin{aligned}
+\nabla_{\m{\mu}} \hat F(\m{\eta}) &=
+ \lh( \frac{\nu_\tau}{2} \m{I} + \m{V} \rh) \m{\mu}
+ -\nu_\tau \lh( \frac{L}{2} \m{z} - \m{A}^\top (\m{A} \m{z} - \m{y}) \rh)
+\\ \implies
+\m{\mu} &=
+ \nu_\tau \lh( \frac{\nu_\tau}{2} \m{I} + \m{V} \rh)^{-1}
+ \lh( \frac{L}{2} \m{z} - \m{A}^\top (\m{A} \m{z} - \m{y}) \rh)
+\end{aligned}
+\end{equation}
+which mirrors the FMF-SBL update.
+
+\subsubsection{Updates to $\m{\gamma}$}
+Setting the $\gamma_i$-gradient of $\hat F$ equal to zero yields,
+\begin{equation}
+\begin{aligned}
+\partial_{\gamma_i} \hat F(\m{\eta}) &=
+ \frac{1}{2} \lh( \nu_\tau a_i + \nu_{w,i} - \gamma_i^{-1} \rh)
+\\ \implies
+\gamma_i &= \lh( \nu_\tau a_i + \nu_{w,i} \rh)^{-1}
+\end{aligned}
+\end{equation}
+which mirrors the SAVE update.
+
 % =============================================================================
 \end{document}
