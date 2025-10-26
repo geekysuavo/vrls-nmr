@@ -6,6 +6,12 @@ app = marimo.App()
 
 @app.cell
 def _():
+    import marimo as mo
+    return (mo,)
+
+
+@app.cell
+def _():
     import pickle
 
     import matplotlib.pyplot as plt
@@ -35,24 +41,21 @@ def _(stdev):
 
 
 @app.cell
-def _(n, torch):
-    _mu = torch.zeros(n)
+def _(A, m, n, plt, tau, torch, x0, xi, y):
+    mu = torch.zeros(n)
     Gamma = torch.eye(n)
     w = torch.ones(n)
-    return (w,)
 
-
-@app.cell
-def _(A, m, plt, tau, torch, w, x0, xi, y):
     for _ in range(100):
         Winv = w.reciprocal().diag()
         K = torch.eye(m) / tau + A @ Winv @ A.t()
         Kinv = torch.linalg.inv(K)
-        _mu = A.t() @ Kinv @ y / w
+        mu = A.t() @ Kinv @ y / w
         Gamma_diag = w.reciprocal() - torch.sum(Kinv @ A / w * A / w, dim=0)
-        m2 = _mu.square() + Gamma_diag
-        w_1 = (xi / (m2 + 1e-09)).sqrt()
-    plt.plot(_mu)
+        m2 = mu.square() + Gamma_diag
+        w = (xi / (m2 + 1e-09)).sqrt()
+
+    plt.plot(mu)
     plt.plot(x0)
     return
 
@@ -68,12 +71,6 @@ def _(mo):
     """
     )
     return
-
-
-@app.cell
-def _():
-    import marimo as mo
-    return (mo,)
 
 
 if __name__ == "__main__":

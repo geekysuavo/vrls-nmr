@@ -46,3 +46,7 @@ def test_vrls():
     torch.testing.assert_close(xvar_cpu, xvar_cuda.cpu())
 
     assert xmean_cpu.abs().gt(0.5).sum(dim=1).eq(k).all()
+
+
+def test_vrls_ex():
+    pass  # FIXME -- test extended vrls algorithm!!!

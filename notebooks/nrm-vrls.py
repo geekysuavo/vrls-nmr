@@ -6,6 +6,12 @@ app = marimo.App()
 
 @app.cell
 def _():
+    import marimo as mo
+    return (mo,)
+
+
+@app.cell
+def _():
     import pickle
 
     import matplotlib.pyplot as plt
@@ -35,54 +41,17 @@ def _(stdev):
 
 
 @app.cell
-def _(n, torch):
+def _(A, n, plt, tau, torch, x0, xi, y):
     mu = torch.zeros(n)
     Gamma = torch.eye(n)
-    return Gamma, mu
 
-
-@app.cell
-def _(Gamma, mu, xi):
-    _m2 = mu.square() + Gamma.diag()
-    w = (xi / (_m2 + 1e-09)).sqrt()
-    return (w,)
-
-
-@app.cell
-def _(A, tau, torch, w):
-    Gamma_1 = torch.linalg.inv(w.diag() + tau * A.t() @ A)
-    return (Gamma_1,)
-
-
-@app.cell
-def _(A, Gamma_1, tau, y):
-    mu_1 = tau * Gamma_1 @ A.t() @ y
-    return (mu_1,)
-
-
-@app.cell
-def _(Gamma_1, mu_1, w):
-    w_init = w.clone()
-    Gamma_init = Gamma_1.clone()
-    mu_init = mu_1.clone()
-    return
-
-
-@app.cell
-def _(mu_1, plt, x0):
-    plt.plot(mu_1)
-    plt.plot(x0)
-    return
-
-
-@app.cell
-def _(A, Gamma_1, mu_1, plt, tau, torch, x0, xi, y):
     for _ in range(100):
-        _m2 = mu_1.square() + Gamma_1.diag()
-        w_1 = (xi / (_m2 + 1e-09)).sqrt()
-        Gamma_2 = torch.linalg.inv(w_1.diag() + tau * A.t() @ A)
-        mu_2 = tau * Gamma_2 @ A.t() @ y
-    plt.plot(mu_2)
+        m2 = mu.square() + Gamma.diag()
+        w = (xi / (m2 + 1e-09)).sqrt()
+        Gamma = torch.linalg.inv(w.diag() + tau * A.t() @ A)
+        mu = tau * Gamma @ A.t() @ y
+
+    plt.plot(mu)
     plt.plot(x0)
     return
 
@@ -102,12 +71,6 @@ def _(mo):
     """
     )
     return
-
-
-@app.cell
-def _():
-    import marimo as mo
-    return (mo,)
 
 
 if __name__ == "__main__":

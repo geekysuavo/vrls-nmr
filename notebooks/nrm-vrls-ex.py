@@ -6,6 +6,12 @@ app = marimo.App()
 
 @app.cell
 def _():
+    import marimo as mo
+    return (mo,)
+
+
+@app.cell
+def _():
     import math
     import pickle
 
@@ -36,53 +42,47 @@ def _():
 
 
 @app.cell
-def _(n, torch):
-    mu = torch.zeros(n)
-    Gamma = torch.eye(n)
-    return Gamma, mu
-
-
-@app.cell
-def _():
+def _(A, beta_tau, beta_xi, n, plt, torch, x0, y):
     nu_tau = 1
     nu_xi = 1
-    return (nu_xi,)
 
+    mu = torch.zeros(n)
+    Gamma = torch.eye(n)
 
-@app.cell
-def _(A, Gamma, beta_tau, beta_xi, mu, nu_xi, plt, torch, x0, y):
     for _ in range(100):
         m2 = mu.square() + Gamma.diag()
         nu_w = (nu_xi / (m2 + 1e-09)).sqrt()
-        nu_xi_1 = (beta_xi / nu_w.reciprocal().sum()).sqrt()
+        nu_xi = (beta_xi / nu_w.reciprocal().sum()).sqrt()
         ess = (y - A @ mu).square().sum() + (A.t() @ A @ Gamma).diag().sum()
-        nu_tau_1 = (beta_tau / ess).sqrt()
-        Gamma_1 = torch.linalg.inv(nu_w.diag() + nu_tau_1 * A.t() @ A)
-        mu_1 = nu_tau_1 * Gamma_1 @ A.t() @ y
-    plt.plot(mu_1)
+        nu_tau = (beta_tau / ess).sqrt()
+        Gamma = torch.linalg.inv(nu_w.diag() + nu_tau * A.t() @ A)
+        mu = nu_tau * Gamma @ A.t() @ y
+
+    plt.plot(mu)
     plt.plot(x0)
-    return nu_tau_1, nu_xi_1
+    return nu_tau, nu_xi
 
 
 @app.cell
 def _(math, torch):
     def inverse_normal(x, nu, lmb):
-        return math.sqrt(lmb / (2 * math.pi * nu ** 3)) * torch.exp(-lmb * (_x - nu).square() / (2 * nu ** 2 * _x))
+        Z = math.sqrt(lmb / (2 * math.pi * nu ** 3))
+        return Z * torch.exp(-lmb * (x - nu).square() / (2 * nu ** 2 * x))
     return (inverse_normal,)
 
 
 @app.cell
-def _(beta_tau, inverse_normal, nu_tau_1, plt, stdev, torch):
+def _(beta_tau, inverse_normal, nu_tau, plt, stdev, torch):
     _x = torch.linspace(0, 100000.0, 1000)
-    plt.plot(_x, inverse_normal(_x, nu_tau_1.item(), beta_tau))
+    plt.plot(_x, inverse_normal(_x, nu_tau.item(), beta_tau))
     plt.scatter([1 / stdev ** 2], [0])
     return
 
 
 @app.cell
-def _(beta_xi, inverse_normal, nu_xi_1, plt, torch):
+def _(beta_xi, inverse_normal, nu_xi, plt, torch):
     _x = torch.linspace(1000.0, 3000.0, 1000)
-    plt.plot(_x, inverse_normal(_x, nu_xi_1.item(), beta_xi))
+    plt.plot(_x, inverse_normal(_x, nu_xi.item(), beta_xi))
     return
 
 
@@ -99,12 +99,6 @@ def _(mo):
     """
     )
     return
-
-
-@app.cell
-def _():
-    import marimo as mo
-    return (mo,)
 
 
 if __name__ == "__main__":

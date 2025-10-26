@@ -59,3 +59,68 @@ def vrls(
         w = (xi / (m2 + eps)).sqrt()
 
     return (mu, Gamma_diag)
+
+
+@torch.inference_mode()
+def vrls_ex(
+    y: Tensor,
+    ids: Tensor,
+    beta_tau: float,
+    beta_xi: float,
+    n: int,
+    niter: int,
+    eps: float = 1.0e-9,
+) -> tuple[Tensor, Tensor]:
+    """
+    Extended VRLS.
+
+    Args:
+        y: :math:`(b, m)`, Measurements (complex).
+        ids: :math:`(m)`, Measurement indices.
+        beta_tau: Prior scale parameter for noise precision.
+        beta_xi: Prior scale parameter for weight scale.
+        n: Sparse dimension size.
+        niter: Number of iterations.
+        eps: Weight update positivity parameter.
+
+    Returns:
+        A :class:`tuple` containing
+
+        - :math:`(b, n)`, Sparse mean (complex).
+        - :math:`(b, n)`, Sparse variance (real, positive).
+    """
+    device = y.device
+    complex_dtype = y.dtype
+    real_dtype = y.dtype.to_real()
+
+    if y.ndim == 1:
+        y = y.unsqueeze(dim=0)
+
+    bs = y.size(dim=0)
+
+    mu = torch.zeros((bs, n), dtype=complex_dtype, device=device)
+    nu_w = torch.ones((bs, n), dtype=real_dtype, device=device)
+    nu_tau = torch.ones((bs,), dtype=real_dtype, device=device)
+    nu_xi = torch.ones((bs,), dtype=real_dtype, device=device)
+
+    for _ in range(niter):
+        K = op.kernel(nu_w, nu_tau, ids)
+        Kinv = torch.linalg.inv(K)
+
+        mu.mul_(0)
+        mu[:, ids] = (Kinv @ y.unsqueeze(dim=-1)).squeeze(dim=-1)
+        mu = torch.fft.fft(mu, norm="ortho") / nu_w
+
+        Gamma_diag = op.xmarginal(Kinv, nu_w, ids)
+
+        m2 = mu.abs().square() + Gamma_diag
+        nu_w = (nu_xi / (m2 + eps)).sqrt()
+
+        nu_xi = (beta_xi / nu_w.reciprocal().sum()).sqrt()
+
+        yhat = torch.fft.ifft(mu, norm="ortho")
+        err = (y - yhat).abs().square().sum()
+        ess = err + Gamma_diag[:, ids].sum() / n
+        nu_tau = (beta_tau / ess).sqrt()
+
+    return (mu, Gamma_diag)
