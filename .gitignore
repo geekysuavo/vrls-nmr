@@ -3,3 +3,5 @@
 environ
 notebooks/__marimo__
 notebooks/*.pickle
+writeup/elsarticle.cls
+writeup/elsarticle-num.bst

@@ -1,0 +1,195 @@
+% \documentclass[preprint,12pt]{elsarticle}
+% \documentclass[preprint,review,12pt]{elsarticle}
+\documentclass[final,5p,times,twocolumn]{elsarticle}
+% ============================================================================
+
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{lineno}
+\usepackage{url}
+\usepackage[
+ pdfauthor={Bradley Worley},
+ pdftitle={Active Nonuniform Sampling},
+ hidelinks]{hyperref}
+
+% ============================================================================
+\journal{Journal of Magnetic Resonance}
+
+\begin{document}
+\begin{frontmatter}
+
+\title{Active Nonuniform Sampling}
+
+\author{Bradley Worley\corref{cor1}}
+\ead{geekysuavo@gmail.com}
+
+\affiliation{
+ organization={Numerion Labs},
+ %addressline={250 Sutter},
+ city={San Francisco},
+ %postcode={94108},
+ state={CA},
+ country={USA}
+}
+
+% ============================================================================
+\begin{abstract}
+Nonuniform sampling is an effective strategy for reducing experiment times
+in multidimensional NMR, enabling practitioners to focus instrument
+resources on indirect dimension times that carry maximal information
+about the measured signal. Given a suitably chosen sampling schedule,
+NUS experiments can yield higher spectral quality in less time, and while
+many suitable choices of schedule exist for any given experiment, their
+selection is still largely based on rules of thumb. This work examines
+the desiderata of \emph{active} nonuniform sampling (ANS), which places a
+reconstruction algorithm within the acquisition loop to select new samples
+on the fly, and develops a candidate ANS algorithm in order to assess the
+performance and practicality of ANS in two-dimensional experiments.
+\end{abstract}
+
+% \begin{graphicalabstract}
+% \includegraphics{grabs}
+% \end{graphicalabstract}
+
+\begin{keyword}
+Active learning \sep
+Compressed sensing \sep
+Nonuniform sampling \sep
+Statistical inference \sep
+Variational inference
+\end{keyword}
+
+\end{frontmatter}
+% \linenumbers
+
+% ============================================================================
+\section{Introduction}
+\label{s:intro}
+Please fix me.
+
+% ============================================================================
+\section{Theory}
+\label{s:theory}
+Please fix me.
+
+% ============================================================================
+\section{Materials and methods}
+\label{s:methods}
+Please fix me.
+
+% ============================================================================
+\section{Results}
+\label{s:results}
+Please fix me.
+
+%% Use \subsection commands to start a subsection.
+\subsection{Example Subsection}
+\label{subsec1}
+
+Subsection text.
+
+%% Use \subsubsection, \paragraph, \subparagraph commands to 
+%% start 3rd, 4th and 5th level sections.
+%% Refer following link for more details.
+%% https://en.wikibooks.org/wiki/LaTeX/Document_Structure#Sectioning_commands
+
+\subsubsection{Mathematics}
+%% Inline mathematics is tagged between $ symbols.
+This is an example for the symbol $\alpha$ tagged as inline mathematics.
+
+%% Displayed equations can be tagged using various environments. 
+%% Single line equations can be tagged using the equation environment.
+\begin{equation}
+f(x) = (x+a)(x+b)
+\end{equation}
+
+%% Unnumbered equations are tagged using starred versions of the environment.
+%% amsmath package needs to be loaded for the starred version of equation environment.
+\begin{equation*}
+f(x) = (x+a)(x+b)
+\end{equation*}
+
+%% align or eqnarray environments can be used for multi line equations.
+%% & is used to mark alignment points in equations.
+%% \\ is used to end a row in a multiline equation.
+\begin{align}
+ f(x) &= (x+a)(x+b) \\
+      &= x^2 + (a+b)x + ab
+\end{align}
+
+\begin{eqnarray}
+ f(x) &=& (x+a)(x+b) \nonumber\\ %% If equation numbering is not needed for a row use \nonumber.
+      &=& x^2 + (a+b)x + ab
+\end{eqnarray}
+
+%% Unnumbered versions of align and eqnarray
+\begin{align*}
+ f(x) &= (x+a)(x+b) \\
+      &= x^2 + (a+b)x + ab
+\end{align*}
+
+\begin{eqnarray*}
+ f(x)&=& (x+a)(x+b) \\
+     &=& x^2 + (a+b)x + ab
+\end{eqnarray*}
+
+%% Refer following link for more details.
+%% https://en.wikibooks.org/wiki/LaTeX/Mathematics
+%% https://en.wikibooks.org/wiki/LaTeX/Advanced_Mathematics
+
+%% Use a table environment to create tables.
+%% Refer following link for more details.
+%% https://en.wikibooks.org/wiki/LaTeX/Tables
+\begin{table}[t]%% placement specifier
+%% Use tabular environment to tag the tabular data.
+%% https://en.wikibooks.org/wiki/LaTeX/Tables#The_tabular_environment
+\centering%% For centre alignment of tabular.
+\begin{tabular}{l c r}%% Table column specifiers
+%% Tabular cells are separated by &
+  1 & 2 & 3 \\ %% A tabular row ends with \\
+  4 & 5 & 6 \\
+  7 & 8 & 9 \\
+\end{tabular}
+%% Use \caption command for table caption and label.
+\caption{Table Caption}\label{fig1}
+\end{table}
+
+
+%% Use figure environment to create figures
+%% Refer following link for more details.
+%% https://en.wikibooks.org/wiki/LaTeX/Floats,_Figures_and_Captions
+\begin{figure}[t]%% placement specifier
+%% Use \includegraphics command to insert graphic files. Place graphics files in 
+%% working directory.
+\centering%% For centre alignment of image.
+\includegraphics[width=0.48\textwidth]{example-image-a}
+%% Use \caption command for figure caption and label.
+\caption{Figure Caption}\label{fig1}
+%% https://en.wikibooks.org/wiki/LaTeX/Importing_Graphics#Importing_external_graphics
+\end{figure}
+
+
+
+
+Example citation, See \cite{worley:cmr2018}.
+
+% ============================================================================
+\section{Conclusions}
+\label{s:concl}
+Please fix me.
+
+% ============================================================================
+\appendix
+\section{Supplementary information}
+\label{a:si}
+This material is available free of charge via the Internet at
+\url{http://www.sciencedirect.com}. Supplementary data associated
+with this article can be found, in the online version, at
+\url{http://dx.doi.org/10.1016/j.jmr.0000.00.000}
+
+% ============================================================================
+\bibliographystyle{elsarticle-num}
+\bibliography{vrls}
+
+\end{document}
+\endinput
