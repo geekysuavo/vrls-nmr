@@ -67,7 +67,7 @@ Variational inference
 
 % ============================================================================
 \section{Introduction}
-\label{s:intro}
+\label{sec:intro}
 Acquiring high-resolution multidimensional NMR spectra is a crucial yet
 highly challenging component of a multitude of modern experimental designs.
 Nonuniform sampling (NUS) is a common and powerful strategy
@@ -126,7 +126,7 @@ an algorithm specifically tailored for ANS.
 
 % ============================================================================
 \section{Theory}
-\label{s:theory}
+\label{sec:theory}
 This work considers the most common special case of NUS, where signals are
 acquired in complete quadrature on a uniform (Nyquist) sampling grid and
 direct-dimension free induction decays are observed for a subset of the
@@ -139,7 +139,7 @@ remaining dimensions effectively ignores nontrivial correlations in the data.
 However, this practice is necessary to meet the speed requirement of ANS.
 
 \subsection{Probabilistic construction}
-\label{ss:bayes}
+\label{subsec:bayes}
 We begin with the standard fixed-basis \cite{worley:cmr2018}
 measurement model,
 \begin{equation}
@@ -174,6 +174,7 @@ p(w_i \mid \xi) =
 results in a conditional distribution,
 \begin{equation}
 \begin{aligned}
+\label{eq:joint}
 p(&\m{y}, \m{x}, \m{w} \mid \xi, \tau) \propto \\
  & \left( {\textstyle\prod}_i w_i^{-\frac{3}{2}} \right)
  \exp\left\{
@@ -232,79 +233,139 @@ $\m{\Phi} \m{\Gamma} \m{\Phi}^\top$ would be circulant, and therefore
 useless in the task of identifying maximally informative grid points.
 
 \subsection{Variationally reweighted least squares}
-\label{ss:vrls}
-Please fix me.
+\label{subsec:vrls}
+The VRLS algorithm is obtained by directly applying alternating minimization
+to $F(\m{\eta})$. The simplest of these updates is that of the weights
+$\m{\nu}$, which is obtained by setting $\partial\nu_i = 0$ and solving,
+\begin{equation}
+\nu_i \gets \sqrt{\xi (\mu_i^2 + \Gamma_{ii})^{-1}}
+\end{equation}
+which mirrors the $\ell_1$-IRLS update of $w_i \gets |x_i|^{-1}$ with
+several interesting advantages. In IRLS, a small correction term $c$ is
+often added to the update to obtain $w_i \gets (x_i^2 + c)^{-1/2}$ in order
+to avoid singularities as $x_i \to 0$ \cite{daubechies:cpam2010}. VRLS
+elegantly uses the marginal variance $\Gamma_{ii}$ as an adaptive
+correction.
+
+Naively updating either $\m{\mu}$ or $\m{\Gamma}$ in the same fashion
+will result in expressions involving dense $n \times n$ matrix inverses,
+\begin{equation}
+\begin{aligned}
+\m{\Gamma} &\gets (\m{V} + \tau \m{A}^\top \m{A})^{-1}
+\\
+\m{\mu} &\gets \tau \m{\Gamma} \m{A}^\top \m{y}
+\end{aligned}
+\end{equation}
+where $\m{V}$ is a diagonal matrix containing the weights $\m{\nu}$. These
+updates are poorly suited to our application, so we will ``kernelize'' them
+using the matrix inversion lemma \cite{boyd2004},
+\begin{align}
+\m{C} &= \m{\Phi} \m{V}^{-1} \m{\Phi}^\top
+\\
+\m{K} &= \tau^{-1} \m{I} + \m{B} \m{C} \m{B}^\top
+\\
+\m{\Gamma} &= \m{V}^{-1} - \m{V}^{-1} \m{A}^\top \m{K}^{-1} \m{A} \m{V}^{-1}
+\end{align}
+where $\m{K}$ is a much smaller $m \times m$ kernel matrix, and $\m{C}$
+is a circulant $n \times n$ matrix whose elements be computed using a
+fast Fourier transform (FFT). With these definitions in hand, the mean
+update becomes,
+\begin{equation}
+\m{\mu} \gets \m{V}^{-1} \m{A}^\top \m{K}^{-1} \m{y}
+\end{equation}
+which no longer requires the full covariance matrix $\m{\Gamma}$. In fact,
+the updates to $\m{\nu}$ only require the diagonal elements of $\m{\Gamma}$,
+and the posterior predictive variances of $\m{\hat y}$ only require the
+diagonal elements of $\m{\Phi} \m{\Gamma} \m{\Phi}^\top$. Both of these
+benefit from kernelization, requiring only $\mathcal{O}(m^2 n)$ operations.
+Detailed derivations of these computations are provided in the
+\nameref{app:si}.
+
+\subsection{Extensions to VRLS}
+\label{subsec:extensions}
+While VRLS only requires handling a small $m \times m$ kernel matrix, it
+is nevertheless matrix-bound. A matrix-free fast mean-field variant of
+VRLS may be easily constructed using majorize-minimization techniques
+\cite{worley:ieeetsp2019}. Because it forms a mean-field approximation
+of the posterior, it cannot be used in ANS. Even so, we derive the fast
+mean-field updates to $\m{\mu}$ and $\Gamma_{ii}$ in the \nameref{app:si}
+to analyze its performance relative to full VRLS.
+
+The VRLS algorithm currently depends on \emph{a priori} knowledge of the
+noise precision $\tau$ and weight parameter $\xi$. While $\tau$ may be
+estimated from a noise sample, $\xi$ balances the data fit and sparsity
+terms in \eqref{eq:joint}, and must be empirically tuned. Alternatively,
+we may place inverse-gamma priors on $\tau$ and $\xi$ and extend VRLS to
+learn approximate posterior factors $q_\tau$ and $q_\xi$. The extended VRLS
+objective and updates are derived in the \nameref{app:si}.
+
+\subsection{Active sampling}
+\label{subsec:ans}
+To complete our ANS algorithm, we use VRLS to select time-domain grid points
+that have maximum expected information gain \cite{mackay:nc1992}. In our
+variational Bayesian framework, this is equivalent to selecting the grid
+points whose posterior predictive variance is largest. The complete
+time-domain signal $\m{\hat y} = \m{\Phi} \m{x}$ has the following
+mean and covariance:
+\begin{align}
+\mathbb{E}_{q(\m{x},\m{w})}[\m{\hat y}] &=
+ \m{\Phi} \m{\mu}
+\\
+\mathrm{Cov}_{q(\m{x},\m{w})}[\m{\hat y}, \m{\hat y}] &=
+ \m{\Phi} \m{\Gamma} \m{\Phi}^\top
+\end{align}
+so we compute the marginal variances and select a new grid point $i_*$
+\begin{equation}
+i_* = \underset{i \in [n]}{\arg\max}
+ \left( \m{e}_i^\top \m{\Phi} \m{\Gamma} \m{\Phi}^\top \m{e}_i \right)
+\end{equation}
+for observation. Ideally, this process occurs within the recycle delay of
+the experiment and adds no additional overhead to the total acquisition
+time.
 
 % ============================================================================
 \section{Materials and methods}
-\label{s:methods}
+\label{sec:methods}
 Please fix me.
 
 % ============================================================================
 \section{Results}
-\label{s:results}
+\label{sec:results}
 Please fix me.
 
-%% Use \subsection commands to start a subsection.
-\subsection{Example Subsection}
-\label{subsec1}
 
-Subsection text.
+%\begin{table}[t]
+%\centering
+%\begin{tabular}{l c r}
+%  1 & 2 & 3 \\
+%  4 & 5 & 6 \\
+%  7 & 8 & 9 \\
+%\end{tabular}
+%\caption{Table Caption}\label{fig1}
+%\end{table}
 
-%% Use \subsubsection, \paragraph, \subparagraph commands to 
-%% start 3rd, 4th and 5th level sections.
-%% Refer following link for more details.
-%% https://en.wikibooks.org/wiki/LaTeX/Document_Structure#Sectioning_commands
-
-\subsubsection{Mathematics}
-%% Use a table environment to create tables.
-%% Refer following link for more details.
-%% https://en.wikibooks.org/wiki/LaTeX/Tables
-\begin{table}[t]%% placement specifier
-%% Use tabular environment to tag the tabular data.
-%% https://en.wikibooks.org/wiki/LaTeX/Tables#The_tabular_environment
-\centering%% For centre alignment of tabular.
-\begin{tabular}{l c r}%% Table column specifiers
-%% Tabular cells are separated by &
-  1 & 2 & 3 \\ %% A tabular row ends with \\
-  4 & 5 & 6 \\
-  7 & 8 & 9 \\
-\end{tabular}
-%% Use \caption command for table caption and label.
-\caption{Table Caption}\label{fig1}
-\end{table}
-
-
-%% Use figure environment to create figures
-%% Refer following link for more details.
-%% https://en.wikibooks.org/wiki/LaTeX/Floats,_Figures_and_Captions
-\begin{figure}[t]%% placement specifier
-%% Use \includegraphics command to insert graphic files. Place graphics files in 
-%% working directory.
-\centering%% For centre alignment of image.
-\includegraphics[width=0.48\textwidth]{example-image-a}
-%% Use \caption command for figure caption and label.
-\caption{Figure Caption}\label{fig1}
-%% https://en.wikibooks.org/wiki/LaTeX/Importing_Graphics#Importing_external_graphics
-\end{figure}
-
+%\begin{figure}[t]
+%\centering
+%\includegraphics[width=0.48\textwidth]{example-image-a}
+%\caption{Figure Caption}\label{fig1}
+%\end{figure}
 
 % ============================================================================
 \section{Conclusions}
-\label{s:concl}
+\label{sec:concl}
 Please fix me.
 
 % ============================================================================
 \appendix
 \section{Supplementary information}
-\label{a:si}
+\label{app:si}
 This material is available free of charge via the Internet at
 \url{http://www.sciencedirect.com}. Supplementary data associated
 with this article can be found, in the online version, at
 \url{http://dx.doi.org/10.1016/j.jmr.0000.00.000}
 
 \section*{Data availability}
-\label{a:data}
+\label{app:data}
 The data and code used to produce this work can be found online at
 \url{http://github.com/geekysuavo/vrls-nmr}.
 
