@@ -13,6 +13,9 @@
  hidelinks]{hyperref}
 
 % ============================================================================
+\newcommand{\m}[1]{\boldsymbol{#1}}
+
+% ============================================================================
 \journal{Journal of Magnetic Resonance}
 
 \begin{document}
@@ -34,8 +37,8 @@
 
 % ============================================================================
 \begin{abstract}
-Nonuniform sampling is an effective strategy for reducing experiment times
-in multidimensional NMR, enabling practitioners to focus instrument
+Nonuniform sampling (NUS) is an effective strategy for reducing experiment
+times in multidimensional NMR, enabling practitioners to focus instrument
 resources on indirect dimension times that carry maximal information
 about the measured signal. Given a suitably chosen sampling schedule,
 NUS experiments can yield higher spectral quality in less time, and while
@@ -65,11 +68,171 @@ Variational inference
 % ============================================================================
 \section{Introduction}
 \label{s:intro}
-Please fix me.
+Acquiring high-resolution multidimensional NMR spectra is a crucial yet
+highly challenging component of a multitude of modern experimental designs.
+Nonuniform sampling (NUS) is a common and powerful strategy
+\cite{kazimierczuk:jmr2009,rovnyak:mrc2011,hyberts:jbnmr2013,palmer:jbnmr2014}
+to reduce total acquisition time while retaining spectral quality by
+measuring part of the signal and computationally estimating the rest
+\cite{bretthorst:cmr2008}.
+However, NUS is not without its own tradeoffs; the ``reconstruction''
+algorithm used to estimate unobserved time-domain data is often non-linear
+and may artificially suppress weak signal content, introduce spurious
+signal content, or narrow spectral lines \cite{maciejewski:jmr2009}.
+Because the quality of reconstruction is sensitive to the choice
+of which part of the signal is observed (the ``sampling schedule''), much
+effort has been invested in designing sampling schedules that perform well
+across the broadest possible range of signals
+\cite{hyberts:jacs2010,mobli:jmr2015,worley:jmr2015,worley:jmr2016b,%
+cullen:mrc2023,love:jmro2025}.
+
+Unfortunately at present, it would appear that no \emph{a priori} method
+exists for selecting an optimal sampling schedule \cite{love:jmro2025}.
+The frequencies and amplitudes of artifacts in any given reconstructed NMR
+spectrum depend how the schedule interferes with the ground-truth signal: the
+act of time-domain subsampling is equivalent to a convolution between the
+ground-truth spectrum and the Fourier transform of the schedule, or point
+spread function (PSF). For any given signal, the task of reconstruction by
+deconvolving the PSF may be helped or hindered by our choice of schedule.
+Envelope-matched sampling \cite{schuyler:jbnmr2011} strikes an interesting
+balance between total agnosticism and full knowledge of the ground-truth
+signal. At the same time, it highlights the central issue of \emph{a priori}
+schedule selection: the optimal schedule depends on the signal, and the
+signal has yet to be measured.
+
+Active nonuniform sampling (ANS, \cite{worley:cmr2018}) has been proposed as
+a principled approach to breaking this dependency cycle. In an ANS
+experiment, the choice of sampling schedule is ceded to an algorithm
+that progressively refines its estimated reconstruction as data are
+observed and proposes grid points to sample next. As ANS aims to maximize
+the information gained by each sampled point, proposals are made based on
+posterior predictive uncertainty of the time-domain signal estimate. This
+immediately leads to a set of nontrivial requirements that any ANS algorithm
+must meet:
+\begin{enumerate}
+ \item Posterior estimates must be computationally inexpensive, as each
+  proposal must be ready within the recycle delay.
+ \item Posterior variances must be accurate enough for active learning,
+  suggesting the use of Bayesian signal modeling.
+ \item Running ANS on the same sample multiple times must yield
+  quantitatively equivalent results.
+\end{enumerate}
+As Bayesian methods are not known for speed or determinism
+\cite{bretthorst1988,bretthorst:jmr1990a,bretthorst:jmr1990b,%
+bretthorst:jmr1990c},
+these three requirements are in apparent contradiction. The remainder of this
+work uses variational approximation \cite{worley:cmr2018,bishop2007} to build
+an algorithm specifically tailored for ANS.
 
 % ============================================================================
 \section{Theory}
 \label{s:theory}
+This work considers the most common special case of NUS, where signals are
+acquired in complete quadrature on a uniform (Nyquist) sampling grid and
+direct-dimension free induction decays are observed for a subset of the
+indirect-dimension grid points based on a sampling schedule.
+Without loss of generality, the following equations
+will focus on the reconstruction of a single indirect-dimension slice. It is
+worth mentioning that the established convention of processing acquired
+direct-dimension traces followed by independent reconstructions along the
+remaining dimensions effectively ignores nontrivial correlations in the data.
+However, this practice is necessary to meet the speed requirement of ANS.
+
+\subsection{Probabilistic construction}
+\label{ss:bayes}
+We begin with the standard fixed-basis \cite{worley:cmr2018}
+measurement model,
+\begin{equation}
+\boldsymbol{y} = \m{A} \m{x} + \m{\epsilon}
+\end{equation}
+where $\m{y}$ are the observed time-domain data, $\m{x}$ is the spectrum
+to be estimated, and $\m{\epsilon}$ is independently and identically
+normally distributed noise with zero mean and precision $\tau$. The
+$m \times n$ matrix $\m{A} = \m{B} \m{\Phi}$ is composed of a subsampling
+matrix $\m{B}$ and a discrete Fourier transform (DFT) matrix $\m{\Phi}$.
+Putting these together yields the likelihood,
+\begin{equation}
+p(\m{y} \mid \m{x}, \tau) =
+ (2 \pi)^{-\frac{m}{2}} \tau^{\frac{m}{2}} \exp\left\{
+  -\frac{\tau}{2} \| \m{y} - \m{A} \m{x} \|_2^2
+ \right\}
+\end{equation}
+Placing a normal prior distribution on each spectral value,
+\begin{equation}
+p(x_i \mid w_i) =
+ (2 \pi)^{-\frac{1}{2}} w_i^{\frac{1}{2}} \exp\left\{
+  -\frac{1}{2} w_i x_i^2
+ \right\}
+\end{equation}
+and an inverse-gamma distribution on the precisions $w_i$ of said prior,
+\begin{equation}
+p(w_i \mid \xi) =
+ \frac{\xi}{2} w_i^{-2} \exp\left\{
+  -\frac{\xi}{2} w_i^{-1}
+ \right\}
+\end{equation}
+results in a conditional distribution,
+\begin{equation}
+\begin{aligned}
+p(&\m{y}, \m{x}, \m{w} \mid \xi, \tau) \propto \\
+ & \left( {\textstyle\prod}_i w_i^{-\frac{3}{2}} \right)
+ \exp\left\{
+  -\frac{\tau}{2} \| \m{y} - \m{A} \m{x} \|_2^2
+  -\frac{1}{2} {\textstyle\sum}_i \left( w_i x_i^2 + \xi w_i^{-1} \right)
+ \right\}
+\end{aligned}
+\end{equation}
+which will be of central importance in subsequent derivations. While it does
+not appear related to other sparsity-inducing priors, this distribution can
+generate a broad range of $\ell_1$ iteratively reweighted least squares
+(IRLS, \cite{daubechies:cpam2010,kazimierczuk:jmr2011})
+algorithms.\footnote{%
+ See the notes in \url{http://github.com/geekysuavo/irls-sandbox}
+ for a more complete overview of $\ell_1$-IRLS algorithms derived
+ from this joint distribution.}
+
+Continuing with a fully Bayesian treatment yields diminishing returns beyond
+this point, so we employ variational inference \cite{wainwright:ftml2008} to
+approximate the posterior over $\m{x}$ and $\m{w}$ by a distribution of the
+form $q(\m{x}, \m{w}) = q_x(\m{x}) \, q_w(\m{w})$ that minimizes the
+variational free energy,
+\begin{equation}
+F(q) =
+ -\mathbb{E}_{q(\m{x},\m{w})}[\ln p(\m{y}, \m{x}, \m{w}, \mid \xi, \tau)]
+ -\mathbb{H}[q(\m{x},\m{w})]
+\end{equation}
+Noting that the minimizing factors $q_x$ and $q_w$ are a multivariate
+normal distribution and a product of inverse normal distributions,
+respectively,
+\begin{align}
+q_x(\m{x}) &= \mathcal{N}(\m{\mu}, \m{\Gamma})
+\\
+q_w(w_i) &= \mathcal{IN}(\nu_i, \lambda_i)
+\end{align}
+we rewrite $F(q)$ as a function over the nontrivial parameters
+$\m{\eta} = \{ \m{\mu}, \m{\Gamma}, \m{\nu} \}$,
+\begin{equation}
+\begin{aligned}
+F(\m{\eta}) &=
+ \frac{\tau}{2} \| \m{y} - \m{A} \m{\mu} \|_2^2
++\frac{\tau}{2} \mathrm{tr}(\m{A}^\top \m{A} \m{\Gamma})
+-\frac{1}{2} \ln\det\m{\Gamma}
+\\ &
++\frac{1}{2} {\textstyle\sum}_i \nu_i (\mu_i^2 + \Gamma_{ii})
++\frac{\xi}{2} {\textstyle\sum}_i \nu_i^{-1}
+\end{aligned}
+\end{equation}
+
+The decision to leave $q_x$ intact in the variational family is intentional.
+A crucial component of ANS is the posterior predictive covariance of the
+complete signal $\m{\hat y}$, which is equal to
+$\m{\Phi} \m{\Gamma} \m{\Phi}^\top$. Had we sought a fully mean-field
+approximation in which $\m{\Gamma}$ is diagonal, the matrix
+$\m{\Phi} \m{\Gamma} \m{\Phi}^\top$ would be circulant, and therefore
+useless in the task of identifying maximally informative grid points.
+
+\subsection{Variationally reweighted least squares}
+\label{ss:vrls}
 Please fix me.
 
 % ============================================================================
@@ -94,49 +257,6 @@ Subsection text.
 %% https://en.wikibooks.org/wiki/LaTeX/Document_Structure#Sectioning_commands
 
 \subsubsection{Mathematics}
-%% Inline mathematics is tagged between $ symbols.
-This is an example for the symbol $\alpha$ tagged as inline mathematics.
-
-%% Displayed equations can be tagged using various environments. 
-%% Single line equations can be tagged using the equation environment.
-\begin{equation}
-f(x) = (x+a)(x+b)
-\end{equation}
-
-%% Unnumbered equations are tagged using starred versions of the environment.
-%% amsmath package needs to be loaded for the starred version of equation environment.
-\begin{equation*}
-f(x) = (x+a)(x+b)
-\end{equation*}
-
-%% align or eqnarray environments can be used for multi line equations.
-%% & is used to mark alignment points in equations.
-%% \\ is used to end a row in a multiline equation.
-\begin{align}
- f(x) &= (x+a)(x+b) \\
-      &= x^2 + (a+b)x + ab
-\end{align}
-
-\begin{eqnarray}
- f(x) &=& (x+a)(x+b) \nonumber\\ %% If equation numbering is not needed for a row use \nonumber.
-      &=& x^2 + (a+b)x + ab
-\end{eqnarray}
-
-%% Unnumbered versions of align and eqnarray
-\begin{align*}
- f(x) &= (x+a)(x+b) \\
-      &= x^2 + (a+b)x + ab
-\end{align*}
-
-\begin{eqnarray*}
- f(x)&=& (x+a)(x+b) \\
-     &=& x^2 + (a+b)x + ab
-\end{eqnarray*}
-
-%% Refer following link for more details.
-%% https://en.wikibooks.org/wiki/LaTeX/Mathematics
-%% https://en.wikibooks.org/wiki/LaTeX/Advanced_Mathematics
-
 %% Use a table environment to create tables.
 %% Refer following link for more details.
 %% https://en.wikibooks.org/wiki/LaTeX/Tables
@@ -169,10 +289,6 @@ f(x) = (x+a)(x+b)
 \end{figure}
 
 
-
-
-Example citation, See \cite{worley:cmr2018}.
-
 % ============================================================================
 \section{Conclusions}
 \label{s:concl}
@@ -186,6 +302,11 @@ This material is available free of charge via the Internet at
 \url{http://www.sciencedirect.com}. Supplementary data associated
 with this article can be found, in the online version, at
 \url{http://dx.doi.org/10.1016/j.jmr.0000.00.000}
+
+\section*{Data availability}
+\label{a:data}
+The data and code used to produce this work can be found online at
+\url{http://github.com/geekysuavo/vrls-nmr}.
 
 % ============================================================================
 \bibliographystyle{elsarticle-num}
