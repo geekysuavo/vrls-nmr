@@ -290,13 +290,14 @@ of the posterior, it cannot be used in ANS. Even so, we derive the fast
 mean-field updates to $\m{\mu}$ and $\Gamma_{ii}$ in the \nameref{app:si}
 to analyze its performance relative to full VRLS.
 
-The VRLS algorithm currently depends on \emph{a priori} knowledge of the
+As written, the VRLS algorithm depends on \emph{a priori} knowledge of the
 noise precision $\tau$ and weight parameter $\xi$. While $\tau$ may be
-estimated from a noise sample, $\xi$ balances the data fit and sparsity
-terms in \eqref{eq:joint}, and must be empirically tuned. Alternatively,
-we may place inverse-gamma priors on $\tau$ and $\xi$ and extend VRLS to
-learn approximate posterior factors $q_\tau$ and $q_\xi$. The extended VRLS
-objective and updates are derived in the \nameref{app:si}.
+estimated from a noise sample, and empirical results strongly suggest that
+tying $\xi=\tau$ yields the best results, the two parameters balance the
+data fit and sparsity terms in \eqref{eq:joint}, and may require manual
+tuning. Alternatively, we may place inverse-gamma priors on $\tau$ and $\xi$
+and extend VRLS to learn approximate posterior factors $q_\tau$ and $q_\xi$.
+The extended VRLS objective and updates are derived in the \nameref{app:si}.
 
 \subsection{Active sampling}
 \label{subsec:ans}
