@@ -35,17 +35,19 @@ def test_vrls():
     y = y.squeeze(dim=2)
     assert y.shape == (bs, m)
 
-    (xmean_cpu, xvar_cpu) = vrls(y, ids, tau, xi, n, 10)
+    out_cpu = vrls(y, ids, tau, xi, n, 10)
 
     y = y.cuda()
     ids = ids.cuda()
 
-    (xmean_cuda, xvar_cuda) = vrls(y, ids, tau, xi, n, 10)
+    out_cuda = vrls(y, ids, tau, xi, n, 10)
 
-    torch.testing.assert_close(xmean_cpu, xmean_cuda.cpu())
-    torch.testing.assert_close(xvar_cpu, xvar_cuda.cpu())
+    assert len(out_cpu) == len(out_cuda)
+    for x_cpu, x_cuda in zip(out_cpu, out_cuda):
+        torch.testing.assert_close(x_cpu, x_cuda.cpu())
 
-    assert xmean_cpu.abs().gt(0.5).sum(dim=1).eq(k).all()
+    xmean = out_cpu[0]
+    assert xmean.abs().gt(0.5).sum(dim=1).eq(k).all()
 
 
 def test_vrls_ex():
@@ -76,17 +78,19 @@ def test_vrls_ex():
     y = y.squeeze(dim=2)
     assert y.shape == (bs, m)
 
-    (xmean_cpu, xvar_cpu) = vrls_ex(y, ids, beta_tau, beta_xi, n, 10)
+    out_cpu = vrls_ex(y, ids, beta_tau, beta_xi, n, 10)
 
     y = y.cuda()
     ids = ids.cuda()
 
-    (xmean_cuda, xvar_cuda) = vrls_ex(y, ids, beta_tau, beta_xi, n, 10)
+    out_cuda = vrls_ex(y, ids, beta_tau, beta_xi, n, 10)
 
-    torch.testing.assert_close(xmean_cpu, xmean_cuda.cpu())
-    torch.testing.assert_close(xvar_cpu, xvar_cuda.cpu())
+    assert len(out_cpu) == len(out_cuda)
+    for x_cpu, x_cuda in zip(out_cpu, out_cuda):
+        torch.testing.assert_close(x_cpu, x_cuda.cpu())
 
-    assert xmean_cpu.abs().gt(0.5).sum(dim=1).eq(k).all()
+    xmean = out_cpu[0]
+    assert xmean.abs().gt(0.5).sum(dim=1).eq(k).all()
 
 
 def test_vrls_mf():
@@ -117,14 +121,16 @@ def test_vrls_mf():
     y = y.squeeze(dim=2)
     assert y.shape == (bs, m)
 
-    (xmean_cpu, xvar_cpu) = vrls_mf(y, ids, tau, xi, n, 100)
+    out_cpu = vrls_mf(y, ids, tau, xi, n, 100)
 
     y = y.cuda()
     ids = ids.cuda()
 
-    (xmean_cuda, xvar_cuda) = vrls_mf(y, ids, tau, xi, n, 100)
+    out_cuda = vrls_mf(y, ids, tau, xi, n, 100)
 
-    torch.testing.assert_close(xmean_cpu, xmean_cuda.cpu())
-    torch.testing.assert_close(xvar_cpu, xvar_cuda.cpu())
+    assert len(out_cpu) == len(out_cuda)
+    for x_cpu, x_cuda in zip(out_cpu, out_cuda):
+        torch.testing.assert_close(x_cpu, x_cuda.cpu())
 
-    assert xmean_cpu.abs().gt(0.5).sum(dim=1).eq(k).all()
+    xmean = out_cpu[0]
+    assert xmean.abs().gt(0.5).sum(dim=1).eq(k).all()

@@ -13,7 +13,7 @@ def vrls(
     n: int,
     niter: int,
     eps: float = 1.0e-9,
-) -> tuple[Tensor, Tensor]:
+) -> tuple[Tensor, Tensor, Tensor, Tensor]:
     """
     Basic VRLS.
 
@@ -29,8 +29,10 @@ def vrls(
     Returns:
         A :class:`tuple` containing
 
-        - :math:`(b, n)`, Sparse mean (complex).
-        - :math:`(b, n)`, Sparse variance (real, positive).
+        - :math:`(b, n)`, Frequency-domain mean (complex).
+        - :math:`(b, n)`, Frequency-domain variance (real, positive).
+        - :math:`(b, n)`, Time-domain mean (complex).
+        - :math:`(b, n)`, Time-domain variance (real, positive).
     """
     device = y.device
     complex_dtype = y.dtype
@@ -58,7 +60,10 @@ def vrls(
         m2 = mu.abs().square() + Gamma_diag
         w = (xi / (m2 + eps)).sqrt()
 
-    return (mu, Gamma_diag)
+    yhat = torch.fft.ifft(mu, norm="ortho")
+    Sigma_diag = op.ymarginal(Kinv, w, ids)
+
+    return (mu, Gamma_diag, yhat, Sigma_diag)
 
 
 @torch.inference_mode()
@@ -70,7 +75,7 @@ def vrls_ex(
     n: int,
     niter: int,
     eps: float = 1.0e-9,
-) -> tuple[Tensor, Tensor]:
+) -> tuple[Tensor, Tensor, Tensor, Tensor]:
     """
     Extended VRLS.
 
@@ -86,8 +91,10 @@ def vrls_ex(
     Returns:
         A :class:`tuple` containing
 
-        - :math:`(b, n)`, Sparse mean (complex).
-        - :math:`(b, n)`, Sparse variance (real, positive).
+        - :math:`(b, n)`, Frequency-domain mean (complex).
+        - :math:`(b, n)`, Frequency-domain variance (real, positive).
+        - :math:`(b, n)`, Time-domain mean (complex).
+        - :math:`(b, n)`, Time-domain variance (real, positive).
     """
     device = y.device
     complex_dtype = y.dtype
@@ -119,12 +126,12 @@ def vrls_ex(
 
         nu_xi = (beta_xi / nu_w.reciprocal().sum(dim=-1)).sqrt()
 
-        yhat = torch.fft.ifft(mu, norm="ortho")[:, ids]
-        err = (y - yhat).abs().square().sum(dim=-1)
+        yhat = torch.fft.ifft(mu, norm="ortho")
+        err = (y - yhat[:, ids]).abs().square().sum(dim=-1)
         ess = err + Sigma_diag[:, ids].sum(dim=-1) / n
         nu_tau = (beta_tau / ess).sqrt()
 
-    return (mu, Gamma_diag)
+    return (mu, Gamma_diag, yhat, Sigma_diag)
 
 
 @torch.inference_mode()
@@ -136,7 +143,7 @@ def vrls_mf(
     n: int,
     niter: int,
     eps: float = 1.0e-9,
-) -> tuple[Tensor, Tensor]:
+) -> tuple[Tensor, Tensor, Tensor, Tensor]:
     """
     Fast mean-field VRLS.
 
@@ -152,8 +159,10 @@ def vrls_mf(
     Returns:
         A :class:`tuple` containing
 
-        - :math:`(b, n)`, Sparse mean (complex).
-        - :math:`(b, n)`, Sparse variance (real, positive).
+        - :math:`(b, n)`, Frequency-domain mean (complex).
+        - :math:`(b, n)`, Frequency-domain variance (real, positive).
+        - :math:`(b, n)`, Time-domain mean (complex).
+        - :math:`(b, n)`, Time-domain variance (real, positive).
     """
     device = y.device
     complex_dtype = y.dtype
@@ -190,4 +199,7 @@ def vrls_mf(
 
         gamma = (tau * AtA_diag + w).reciprocal()
 
-    return (mu, gamma)
+    yhat = torch.fft.ifft(mu, norm="ortho")
+    sigma = gamma.mean(dim=1, keepdim=True).expand_as(yhat)
+
+    return (mu, gamma, yhat, sigma)
