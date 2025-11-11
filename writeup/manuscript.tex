@@ -46,8 +46,8 @@ many suitable choices of schedule exist for any given experiment, their
 selection is still largely based on rules of thumb. This work examines
 the desiderata of \emph{active} nonuniform sampling (ANS), which places a
 reconstruction algorithm within the acquisition loop to select new samples
-on the fly, and develops a candidate ANS algorithm in order to assess the
-performance and practicality of ANS in two-dimensional experiments.
+on the fly, and develops a candidate ANS algorithm in order to assess its
+performance and practicality in two-dimensional experiments.
 \end{abstract}
 
 % \begin{graphicalabstract}
@@ -106,14 +106,13 @@ experiment, the choice of sampling schedule is ceded to an algorithm
 that progressively refines its estimated reconstruction as data are
 observed and proposes grid points to sample next. As ANS aims to maximize
 the information gained by each sampled point, proposals are made based on
-posterior predictive uncertainty of the time-domain signal estimate. This
-immediately leads to a set of nontrivial requirements that any ANS algorithm
-must meet:
+the current uncertainty of the time-domain signal estimate. This immediately
+leads to a set of nontrivial requirements that any ANS algorithm must meet:
 \begin{enumerate}
- \item Posterior estimates must be computationally inexpensive, as each
+ \item Uncertainty estimates must be computationally inexpensive, as each
   proposal must be ready within the recycle delay.
- \item Posterior variances must be accurate enough for active learning,
-  suggesting the use of Bayesian signal modeling.
+ \item Uncertainties must be accurate enough for active learning,
+  suggesting the use of Bayesian posterior predictive variances.
  \item Running ANS on the same sample multiple times must yield
   quantitatively equivalent results.
 \end{enumerate}
@@ -210,8 +209,8 @@ q_x(\m{x}) &= \mathcal{N}(\m{\mu}, \m{\Gamma})
 \\
 q_w(w_i) &= \mathcal{IN}(\nu_i, \lambda_i)
 \end{align}
-we rewrite $F(q)$ as a function over the nontrivial parameters
-$\m{\eta} = \{ \m{\mu}, \m{\Gamma}, \m{\nu} \}$,
+we rewrite $F(q)$ as a function of the nontrivial parameters of $q$,
+namely $\m{\eta} = \{ \m{\mu}, \m{\Gamma}, \m{\nu} \}$,
 \begin{equation}
 \begin{aligned}
 F(\m{\eta}) &=
@@ -267,7 +266,7 @@ using the matrix inversion lemma \cite{boyd2004},
 \m{\Gamma} &= \m{V}^{-1} - \m{V}^{-1} \m{A}^\top \m{K}^{-1} \m{A} \m{V}^{-1}
 \end{align}
 where $\m{K}$ is a much smaller $m \times m$ kernel matrix, and $\m{C}$
-is a circulant $n \times n$ matrix whose elements be computed using a
+is a circulant $n \times n$ matrix whose elements may be computed using a
 fast Fourier transform (FFT). With these definitions in hand, the mean
 update becomes,
 \begin{equation}
@@ -326,6 +325,38 @@ time.
 % ============================================================================
 \section{Materials and methods}
 \label{sec:methods}
+
+\subsection{Software implementation}
+\label{subsec:impl}
+A PyTorch \cite{pytorch} extension module was written in C++14 that
+implements the VRLS, extended VRLS, and fast mean-field VRLS algorithms.
+Computations of the kernel matrix, frequency-domain marginal variances,
+and time-domain marginal variances are performed in parallel using the
+OpenMP API \cite{dagum:cse1998} on the CPU and using
+CUDA \cite{nickolls:siggraph2008} on the GPU. Accelerating computations
+on the GPU is important for minimizing the time required to propose new
+grid points for sampling, and PyTorch provides many highly optimized
+linear algebra and FFT operators for the GPU, making it an ideal
+framework for an ANS algorithm.
+
+\subsection{Software benchmarking}
+\label{subsec:bench}
+% begin notes to delete
+Please fix me.
+\begin{itemize}
+\item Reconstructions of my 5\% NUS 1H-15N HSQC
+\item Compare quality and convergence rate of VRLS to VRLS-FMF
+\item Analyze runtime as $m$ increases for selected fixed $n$
+\item Simulate ANS using Micah's US 1H-13C HSQC
+\item Simulate ANS using synthetic data
+\item Look at PSFs from synthetic ANS runs on same signal
+\item Look at $\ell_2$ error and $F$ rates--better than unif./exp.~bias?
+\item Should we include an exponential bias in the variance?
+\end{itemize}
+% end notes to delete
+
+\subsection{Datasets}
+\label{subsec:datasets}
 Please fix me.
 
 % ============================================================================
