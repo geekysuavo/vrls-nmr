@@ -72,28 +72,60 @@ def _(Signal):
 
 
 @app.cell
-def _(ground_truth, torch, vrls):
+def _(math):
+    def expect_success(m: int, n: int, k: int, margin: float) -> bool:
+        return m > margin * k * math.log10(n / k)
+    return (expect_success,)
+
+
+@app.cell
+def _(expect_success):
+    def determine_size(
+        n_initial: int,
+        n_final: int,
+        n_prev: int,
+        m: int,
+        eps: float = 0.2,
+        margin: float = 1.5,
+    ) -> int:
+        k_prev = int(eps * n_prev)
+        n = n_prev
+        while n < n_final and expect_success(m, 2 * n, k_prev, margin):
+            n *= 2
+
+        return n
+    return (determine_size,)
+
+
+@app.cell
+def _(determine_size, ground_truth, torch, vrls):
     sigma = 0.1
     tau = 1 / sigma**2
     xi = tau
-    n = 2048
+    m_initial = 16
+    n_initial = 64
+    n_final = 2048
     niter = 100
-    nsamp = 50
+    nsamp = 10
 
-    ids_list = [0]
+    ids_list = list(range(m_initial))
     ids = torch.tensor(ids_list).cuda()
     y = ground_truth(ids, noise=sigma)
 
+    n = n_initial
     iterates = []
     for _ in range(nsamp):
+        m = len(ids_list)
+        n = determine_size(n_initial, n_final, n, m)
+
         (mu, Gamma_diag, yhat, Sigma_diag) = vrls(y, ids, tau, xi, n, niter)
 
         mu = mu.roll(n // 2).squeeze(dim=0)
-        Gamma_diag = Gamma_diag.squeeze(dim=0)
+        Gamma_diag = Gamma_diag.roll(n // 2).squeeze(dim=0)
 
         yhat = yhat.squeeze(dim=0).narrow(dim=0, start=0, length=n // 2)
         Sigma_diag = Sigma_diag.squeeze(dim=0).narrow(dim=0, start=0, length=n // 2)
-    
+
         iterates.append((mu.cpu(), Gamma_diag.cpu(), yhat.cpu(), Sigma_diag.cpu()))
 
         objective = Sigma_diag.clone()
@@ -105,7 +137,7 @@ def _(ground_truth, torch, vrls):
         ids_list.append(next_index)
         ids = torch.tensor(ids_list).cuda()
         y = torch.cat((y, y_next), dim=0)
-    return Sigma_diag, ids, n, sigma, y, yhat
+    return Gamma_diag, Sigma_diag, ids, iterates, mu, n, sigma, y, yhat
 
 
 @app.cell
@@ -132,26 +164,45 @@ def _(Sigma_diag, ground_truth, ids, n, plt, torch, y, yhat):
 
 
 @app.cell
-def _(F, ground_truth, n, plt, sigma, t, torch):
+def _(iterates, plt):
+    plt.plot(iterates[0][3])
+    plt.plot(iterates[1][3])
+    #plt.plot(iterates[10][3])
+    #plt.plot(iterates[20][3])
+    plt.plot(iterates[-1][3])
+    return
+
+
+@app.cell
+def _(F, ground_truth, mu, n, plt, sigma, t, torch):
     spect = torch.fft.fft(
         F.pad(ground_truth(t.cuda(), noise=sigma), (0, n // 2)),
         norm="ortho",
     ).roll(n // 2)
 
-    #plt.plot(mu.real.cpu())
+    plt.plot(mu.real.cpu())
     plt.plot(spect.real.cpu(), alpha=0.5)
-    return (spect,)
+    return
 
 
 @app.cell
-def _(spect):
-    K = spect.real.gt(0.5).sum()
-    return (K,)
+def _(mu):
+    K = mu.real.gt(0.5).sum()
+    K
+    return
 
 
 @app.cell
-def _(K, n):
-    K * (n / K).log10()
+def _(Gamma_diag, mu):
+    (mu.abs() > Gamma_diag.sqrt()).sum()
+    return
+
+
+@app.cell
+def _(Gamma_diag, mu, plt):
+    plt.plot(mu.abs().cpu())
+    plt.ylim((-0.1, 1))
+    plt.plot(Gamma_diag.sqrt().cpu())
     return
 
 
