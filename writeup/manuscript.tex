@@ -328,10 +328,10 @@ an $\ell_1$-IRLS algorithm subject to compressed sensing (CS) theory
 \cite{donoho:ieeeit2006}. As a consequence, ANS must contend with a sort
 of ``cold start'' problem: naively beginning with a single measurement
 on a large grid places VRLS outside the desirable region of its
-sparsity-undersampling phase space \cite{donoho:pnas2009} where successful
-reconstructions are expected. To overcome this, ANS begins with an initial
-number of measurements $m_0 > 1$ uniformly sampled, and gradually increases
-the size of its grid $n$ using a CS-inspired heuristic,
+sparsity-undersampling phase diagram \cite{donoho:pnas2009} where
+successful reconstructions are expected. To overcome this, ANS begins
+with an initial number of measurements $m_0 > 1$ uniformly sampled, and
+gradually increases the size of its grid $n$ using a CS-inspired heuristic,
 \begin{equation}
 n_* = \sup\left\{
   n \le n_{\max}
@@ -367,7 +367,6 @@ Please fix me.
 \item Reconstructions of my 5\% NUS 1H-15N HSQC
 \item Compare quality and convergence rate of VRLS to VRLS-FMF
 \item Analyze runtime as $m$ increases for selected fixed $n$
-\item Simulate ANS using Micah's US 1H-13C HSQC
 \item Simulate ANS using synthetic data
 \item Look at PSFs from synthetic ANS runs on same signal
 \item Look at $\ell_2$ error and $F$ rates--better than unif./exp.~bias?
