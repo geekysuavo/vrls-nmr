@@ -293,7 +293,7 @@ to analyze its performance relative to full VRLS.
 As written, the VRLS algorithm depends on \emph{a priori} knowledge of the
 noise precision $\tau$ and weight parameter $\xi$. While $\tau$ may be
 estimated from a noise sample, and empirical results strongly suggest that
-tying $\xi=\tau$ yields the best results, the two parameters balance the
+tying $\xi=\tau$ yields the best estimates, the two parameters balance the
 data fit and sparsity terms in \eqref{eq:joint}, and may require manual
 tuning. Alternatively, we may place inverse-gamma priors on $\tau$ and $\xi$
 and extend VRLS to learn approximate posterior factors $q_\tau$ and $q_\xi$.
@@ -322,6 +322,25 @@ i_* = \underset{i \in [n]}{\arg\max}
 for observation. Ideally, this process occurs within the recycle delay of
 the experiment and adds no additional overhead to the total acquisition
 time.
+
+While VRLS was derived from a probabilistic perspective, it is ultimately
+an $\ell_1$-IRLS algorithm subject to compressed sensing (CS) theory
+\cite{donoho:ieeeit2006}. As a consequence, ANS must contend with a sort
+of ``cold start'' problem: naively beginning with a single measurement
+on a large grid places VRLS outside the desirable region of its
+sparsity-undersampling phase space \cite{donoho:pnas2009} where successful
+reconstructions are expected. To overcome this, ANS begins with an initial
+number of measurements $m_0 > 1$ uniformly sampled, and gradually increases
+the size of its grid $n$ using a CS-inspired heuristic,
+\begin{equation}
+n_* = \sup\left\{
+  n \le n_{\max}
+ \mid
+  m/n > \varepsilon \log(1/\varepsilon)
+ \right\}
+\end{equation}
+where $\varepsilon \in (0,1)$ is a rough estimate of the sparsity of
+the signal, i.e.~the fraction of nonzero elements of $\m{x}$.
 
 % ============================================================================
 \section{Materials and methods}
