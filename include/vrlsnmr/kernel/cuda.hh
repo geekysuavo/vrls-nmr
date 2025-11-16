@@ -23,7 +23,8 @@ __global__ void kernel(
     const int j = ij - i * m;
 
     if (i == j) {
-      out[b][i][j] = coeffs[b][0] + 1 / tau[b];
+      const c10::complex<scalar_t> c0{coeffs[b][0].real()};
+      out[b][i][j] = c0 + 1 / tau[b];
     }
     else if (i < j) {
       const int k = n + ids[i] - ids[j];

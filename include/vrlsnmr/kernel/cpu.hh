@@ -18,7 +18,8 @@ void kernel(
   #pragma omp parallel for
   for (int64_t b = 0; b < bs; ++b) {
     for (int64_t i = 0; i < m; ++i) {
-      out[b][i][i] = coeffs[b][0] + 1 / tau[b];
+      const c10::complex<scalar_t> c0{coeffs[b][0].real()};
+      out[b][i][i] = c0 + 1 / tau[b];
 
       for (int64_t j = i + 1; j < m; ++j) {
         const auto k = n + ids[i] - ids[j];
