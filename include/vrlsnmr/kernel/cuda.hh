@@ -27,7 +27,8 @@ __global__ void kernel(
       out[b][i][j] = c0 + 1 / tau[b];
     }
     else if (i < j) {
-      const int k = n + ids[i] - ids[j];
+      const int diff = ids[i] - ids[j];
+      const int k = diff >= 0 ? diff : n + diff;
       const auto Kij = coeffs[b][k];
 
       out[b][i][j] = Kij;

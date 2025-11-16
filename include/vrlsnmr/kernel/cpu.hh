@@ -22,7 +22,8 @@ void kernel(
       out[b][i][i] = c0 + 1 / tau[b];
 
       for (int64_t j = i + 1; j < m; ++j) {
-        const auto k = n + ids[i] - ids[j];
+        const auto diff = ids[i] - ids[j];
+        const auto k = diff >= 0 ? diff : n + diff;
         const auto Kij = coeffs[b][k];
 
         out[b][i][j] = Kij;
