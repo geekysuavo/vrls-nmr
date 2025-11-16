@@ -77,6 +77,8 @@ def test_kernel(matrices):
     K = op.kernel(w, tau, ids)
 
     torch.testing.assert_close(Kref, K, rtol=1e-6, atol=1e-6)
+    assert K.diagonal(dim1=1, dim2=2).real.gt(0).all()
+    assert K.diagonal(dim1=1, dim2=2).imag.eq(0).all()
 
 
 def test_xmarginal(matrices):
@@ -93,6 +95,7 @@ def test_xmarginal(matrices):
     g = op.xmarginal(Kinv, w, ids)
 
     torch.testing.assert_close(gref, g, rtol=1e-6, atol=1e-6)
+    assert g.gt(0).all()
 
 
 def test_ymarginal(matrices):
@@ -111,3 +114,4 @@ def test_ymarginal(matrices):
     s = op.ymarginal(Kinv, w, ids)
 
     torch.testing.assert_close(sref, s, rtol=1e-6, atol=1e-6)
+    assert s.gt(0).all()
