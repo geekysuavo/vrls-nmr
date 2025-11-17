@@ -1,13 +1,15 @@
 import marimo
 
-__generated_with = "0.17.7"
+__generated_with = "0.17.8"
 app = marimo.App(width="medium")
 
 
 @app.cell
 def _():
     import cmath
+    from functools import partial
     import math
+    from types import SimpleNamespace
 
     import matplotlib.pyplot as plt
     import numpy as np
@@ -16,7 +18,33 @@ def _():
     import torch.nn.functional as F
 
     from vrlsnmr.algorithms import vrls
-    return F, Tensor, math, nn, plt, torch, vrls
+    return F, Tensor, math, nn, partial, plt, torch, vrls
+
+
+@app.cell
+def _(torch):
+    def constant(n: int, value: float) -> list[float]:
+        return torch.full((n,), fill_value=value).tolist()
+
+    def random_chisq(n: int, *, dof: int, mean: float) -> list[float]:
+        return torch.randn(n, dof).square().mean(dim=1).mul(mean).tolist()
+
+    def random_unif(n: int, min: float, max: float) -> list[float]:
+        return torch.rand(n).mul(max - min).add(min).tolist()
+
+    def random_spaced(n: int, min: float, max: float, space: float) -> list[float]:
+        pool = random_unif(n, min, max)
+        out = [pool.pop()]
+        while len(out) < n:
+            if not pool:
+                pool = random_unif(n, min, max)
+
+            trial = pool.pop()
+            if all(abs(trial) > space for value in out):
+                out.append(trial)
+
+        return out
+    return constant, random_chisq, random_spaced
 
 
 @app.cell
@@ -55,16 +83,34 @@ def _(Tensor, math, nn, torch):
             out = (ph * torch.complex(real, imag)).sum(dim=1)
             eps = noise * torch.randn_like(out)
             return out + eps
+
+        @classmethod
+        def random(
+            cls,
+            num_components: int = 1,
+            *,
+            frequencies: callable,
+            decayrates: callable,
+            amplitudes: callable,
+            phases: callable,
+        ) -> "Signal":
+            return cls(
+                frequencies=frequencies(num_components),
+                decayrates=decayrates(num_components),
+                amplitudes=amplitudes(num_components),
+                phases=phases(num_components),
+            )
     return (Signal,)
 
 
 @app.cell
-def _(Signal):
-    ground_truth = Signal(
-        frequencies=[-0.083, -0.026, 0.038, 0.042, 0.074, 0.091],
-        decayrates=[0.001, 0.001, 0.001, 0.001, 0.001, 0.001],
-        amplitudes=[1.0, 1.0, 0.1, 0.3, 1.0, 0.9],
-        phases=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+def _(Signal, constant, partial, random_chisq, random_spaced):
+    ground_truth = Signal.random(
+        num_components=5,
+        frequencies=partial(random_spaced, min=-0.5, max=0.5, space=0.005),
+        decayrates=partial(random_chisq, dof=20, mean=0.001),
+        amplitudes=partial(random_chisq, dof=3, mean=1.0),
+        phases=partial(constant, value=0.0),
     )
 
     ground_truth.cuda()
@@ -75,46 +121,47 @@ def _(Signal):
 def _(math):
     def expect_success(m: int, n: int, k: int, margin: float) -> bool:
         return m > margin * k * math.log10(n / k)
-    return (expect_success,)
+    return
+
+
+@app.function
+def determine_size(
+    n_initial: int,
+    n_final: int,
+    n_prev: int,
+    m: int,
+    eps: float = 0.2,
+    margin: float = 1.5,
+) -> int:
+    k_prev = int(eps * n_prev)
+    n = n_prev
+    while n < n_final and m / n >= 0.1:
+        n *= 2
+
+    return n
 
 
 @app.cell
-def _(expect_success):
-    def determine_size(
-        n_initial: int,
-        n_final: int,
-        n_prev: int,
-        m: int,
-        eps: float = 0.2,
-        margin: float = 1.5,
-    ) -> int:
-        k_prev = int(eps * n_prev)
-        n = n_prev
-        while n < n_final and expect_success(m, 2 * n, k_prev, margin):
-            n *= 2
-
-        return n
-    return (determine_size,)
-
-
-@app.cell
-def _(determine_size, ground_truth, torch, vrls):
+def _(ground_truth, torch, vrls):
     sigma = 0.1
     tau = 1 / sigma**2
     xi = tau
+    niter = 100
+
     m_initial = 16
+    m_final = 64
+
     n_initial = 64
     n_final = 2048
-    niter = 100
-    nsamp = 10
 
     ids_list = list(range(m_initial))
     ids = torch.tensor(ids_list).cuda()
     y = ground_truth(ids, noise=sigma)
 
+    m = m_initial
     n = n_initial
     iterates = []
-    for _ in range(nsamp):
+    while m < m_final:
         m = len(ids_list)
         n = determine_size(n_initial, n_final, n, m)
 
@@ -126,7 +173,7 @@ def _(determine_size, ground_truth, torch, vrls):
         yhat = yhat.squeeze(dim=0).narrow(dim=0, start=0, length=n // 2)
         Sigma_diag = Sigma_diag.squeeze(dim=0).narrow(dim=0, start=0, length=n // 2)
 
-        iterates.append((mu.cpu(), Gamma_diag.cpu(), yhat.cpu(), Sigma_diag.cpu()))
+        iterates.append((mu.cpu(), Gamma_diag.cpu(), yhat.cpu(), Sigma_diag.cpu(), m, n))
 
         objective = Sigma_diag.clone()
         objective[ids] = 0
@@ -137,7 +184,7 @@ def _(determine_size, ground_truth, torch, vrls):
         ids_list.append(next_index)
         ids = torch.tensor(ids_list).cuda()
         y = torch.cat((y, y_next), dim=0)
-    return Gamma_diag, Sigma_diag, ids, iterates, mu, n, sigma, y, yhat
+    return Sigma_diag, ids, iterates, mu, n, sigma, y, yhat
 
 
 @app.cell
@@ -174,6 +221,18 @@ def _(iterates, plt):
 
 
 @app.cell
+def _(iterates, plt):
+    fig, ax = plt.subplots()
+
+    ax.plot([it[-2] for it in iterates], label="m", c="green")
+    ax.plot([it[-1] for it in iterates], label="n", c="blue")
+
+    ax2 = ax.twinx()
+    ax2.plot([it[-2] / it[-1] for it in iterates], label="m/n", c="red")
+    return
+
+
+@app.cell
 def _(F, ground_truth, mu, n, plt, sigma, t, torch):
     spect = torch.fft.fft(
         F.pad(ground_truth(t.cuda(), noise=sigma), (0, n // 2)),
@@ -182,32 +241,6 @@ def _(F, ground_truth, mu, n, plt, sigma, t, torch):
 
     plt.plot(mu.real.cpu())
     plt.plot(spect.real.cpu(), alpha=0.5)
-    return
-
-
-@app.cell
-def _(mu):
-    K = mu.real.gt(0.5).sum()
-    K
-    return
-
-
-@app.cell
-def _(Gamma_diag, mu):
-    (mu.abs() > Gamma_diag.sqrt()).sum()
-    return
-
-
-@app.cell
-def _(Gamma_diag, mu, plt):
-    plt.plot(mu.abs().cpu())
-    plt.ylim((-0.1, 1))
-    plt.plot(Gamma_diag.sqrt().cpu())
-    return
-
-
-@app.cell
-def _():
     return
 
 

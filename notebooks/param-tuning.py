@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.17.7"
+__generated_with = "0.17.8"
 app = marimo.App(width="medium")
 
 
@@ -103,16 +103,11 @@ def _(ids, n, niter, tau, vrls, xi, y):
     (mu, Gamma_diag, yhat, Sigma_diag) = vrls(y, ids, tau, xi, n, niter)
 
     mu = mu.roll(n // 2).squeeze(dim=0)
-    Gamma_diag = Gamma_diag.squeeze(dim=0)
+    Gamma_diag = Gamma_diag.roll(n // 2).squeeze(dim=0)
 
     yhat = yhat.squeeze(dim=0).narrow(dim=0, start=0, length=n // 2)
     Sigma_diag = Sigma_diag.squeeze(dim=0).narrow(dim=0, start=0, length=n // 2)
     return Sigma_diag, mu, yhat
-
-
-@app.cell
-def _():
-    return
 
 
 @app.cell
