@@ -20,7 +20,7 @@ def ans(
 
     Args:
         measure: Measurement function accepting a grid point to observe
-            and returning a :math:`(1)` or :math:(b, 1)` complex tensor.
+            and returning a :math:`(1)` or :math:`(b, 1)` complex tensor.
         m_initial: Initial number of (uniform) measurements.
         m_final: Final (total) number of measurements.
         n_initial: Initial (minimum) Fourier grid size.
