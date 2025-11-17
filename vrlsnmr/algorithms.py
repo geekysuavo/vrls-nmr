@@ -1,7 +1,72 @@
+from typing import Callable
+
 import torch
 from torch import Tensor
 
 import vrlsnmr.operators as op
+
+
+def ans(
+    measure: Callable[[int], Tensor],
+    m_initial: int,
+    m_final: int,
+    n_initial: int,
+    n_final: int,
+    min_sparsity: float,
+    **vlrs_kwargs: int | float,
+) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
+    """
+    Active nonuniform sampling (ANS) using :func:`vrls`.
+
+    Args:
+        measure: Measurement function accepting a grid point to observe
+            and returning a :math:`(1)` or :math:(b, 1)` complex tensor.
+        m_initial: Initial number of (uniform) measurements.
+        m_final: Final (total) number of measurements.
+        n_initial: Initial (minimum) Fourier grid size.
+        n_final: Final (maximum) Fourier grid size.
+        min_sparsity: Minimum sparsity maintained for :func:`vrls`.
+        vrls_kwargs: Keyword arguments passed to :func:`vrls`.
+
+    Returns:
+        A :class:`tuple` containing
+
+        - :math:`(b, m)`, Final time-domain measurements (complex).
+        - :math:`(m)`, Final time-domain measurement indices.
+        - :math:`(b, n)`, Frequency-domain mean (complex).
+        - :math:`(b, n)`, Frequency-domain variance (real, positive).
+        - :math:`(b, n)`, Time-domain mean (complex).
+        - :math:`(b, n)`, Time-domain variance (real, positive).
+    """
+    def adapt_size(m_next: int, n_prev: int) -> int:
+        n_next = n_prev
+        while n_next < n_final and m_next / n_next >= min_sparsity:
+            n_next *= 2
+        return n_next
+
+    y = torch.cat([measure(t) for t in range(m_initial)], dim=-1)
+    ids = torch.arange(m_initial, device=y.device)
+    (m, n) = (m_initial, n_initial)
+
+    while m < m_final:
+        n = adapt_size(m, n)
+        (mu, Gamma_diag, yhat, Sigma_diag) = vrls(y, ids, n=n, **vrls_kwargs)
+
+        mu = mu.roll(n // 2, dim=1)
+        Gamma_diag = Gamma_diag.roll(n // 2, dim=1)
+
+        yhat = yhat.narrow(dim=1, start=0, length=n // 2)
+        Sigma_diag = Sigma_diag.narrow(dim=1, start=0, length=n // 2)
+
+        objective = Sigma_diag.sum(dim=0).clone()
+        objective[ids] = 0
+
+        next_index = objective.argmax(keepdim=True)
+        y_next = measure(next_index.item())
+        ids = torch.cat((ids, next_index))
+        y = torch.cat((y, y_next), dim=-1)
+
+    return (y, ids, mu, Gamma_diag, yhat, Sigma_diag)
 
 
 @torch.inference_mode()
@@ -18,7 +83,7 @@ def vrls(
     Basic VRLS.
 
     Args:
-        y: :math:`(b, m)`, Measurements (complex).
+        y: :math:(m)` or :math:`(b, m)`, Measurements (complex).
         ids: :math:`(m)`, Measurement indices.
         tau: Fixed noise precision.
         xi: Fixed weight scale.
@@ -80,7 +145,7 @@ def vrls_ex(
     Extended VRLS.
 
     Args:
-        y: :math:`(b, m)`, Measurements (complex).
+        y: :math:`(m)` or :math:`(b, m)`, Measurements (complex).
         ids: :math:`(m)`, Measurement indices.
         beta_tau: Prior scale parameter for noise precision.
         beta_xi: Prior scale parameter for weight scale.
@@ -148,7 +213,7 @@ def vrls_mf(
     Fast mean-field VRLS.
 
     Args:
-        y: :math:`(b, m)`, Measurements (complex).
+        y: :math:`(m)` or :math:`(b, m)`, Measurements (complex).
         ids: :math:`(m)`, Measurement indices.
         tau: Fixed noise precision.
         xi: Fixed weight scale.
@@ -171,8 +236,7 @@ def vrls_mf(
     if y.ndim == 1:
         y = y.unsqueeze(dim=0)
 
-    bs = y.size(dim=0)
-    m = ids.size(dim=0)
+    (bs, m) = y.shape
 
     w = torch.ones((bs, n), dtype=real_dtype, device=device)
     mu = torch.zeros((bs, n), dtype=complex_dtype, device=device)
