@@ -13,7 +13,7 @@ def ans(
     n_initial: int,
     n_final: int,
     min_sparsity: float,
-    **vlrs_kwargs: int | float,
+    **vrls_kwargs: int | float,
 ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
     """
     Active nonuniform sampling (ANS) using :func:`vrls`.
@@ -49,11 +49,12 @@ def ans(
     (m, n) = (m_initial, n_initial)
 
     while m < m_final:
+        m = ids.numel()
         n = adapt_size(m, n)
         (mu, Gamma_diag, yhat, Sigma_diag) = vrls(y, ids, n=n, **vrls_kwargs)
 
-        mu = mu.roll(n // 2, dim=1)
-        Gamma_diag = Gamma_diag.roll(n // 2, dim=1)
+        mu = mu.roll(n // 2, dims=1)
+        Gamma_diag = Gamma_diag.roll(n // 2, dims=1)
 
         yhat = yhat.narrow(dim=1, start=0, length=n // 2)
         Sigma_diag = Sigma_diag.narrow(dim=1, start=0, length=n // 2)
