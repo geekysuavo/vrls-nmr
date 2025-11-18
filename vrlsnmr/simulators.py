@@ -113,32 +113,82 @@ class Signal(nn.Module):
 
 
 def constant(n: int, bs: int, *, value: float) -> Tensor:
+    """
+    Build a tensor filled with constant values.
+
+    Args:
+        n: Number of components.
+        bs: Number of replicas.
+        value: Constant value.
+
+    Returns:
+        :math:`(bs, n)`, Output tensor.
+    """
     return torch.full((bs, n), fill_value=value)
 
 
 def random_chisq(n: int, bs: int, *, dof: int, mean: float) -> Tensor:
+    """
+    Build a tensor filled with scaled chi-squared distributed values.
+
+    Args:
+        n: Number of components.
+        bs: Number of replicas.
+        dof: Degrees of freedom.
+        mean: Scale factor.
+
+    Returns:
+        :math:`(bs, n)`, Output tensor.
+    """
     return torch.randn(bs, n, dof).square().mean(dim=2).mul(mean)
 
 
 def random_unif(n: int, bs: int, *, lower: float, upper: float) -> Tensor:
+    """
+    Build a tensor filled with uniformly distributed values.
+
+    Args:
+        n: Number of components.
+        bs: Number of replicas.
+        lower: Minimum value.
+        upper: Maximum value.
+
+    Returns:
+        :math:`(bs, n)`, Output tensor.
+    """
     return torch.rand(bs, n).mul(upper - lower).add(lower)
 
 
 def random_spaced(
     n: int, bs: int, *, lower: float, upper: float, space: float
 ) -> Tensor:
-    # FIXME broken
+    """
+    Build a tensor filled with uniformly distributed values such that
+    no two values are within a minimum spacing.
+
+    Args:
+        n: Number of components.
+        bs: Number of replicas.
+        lower: Minimum value.
+        upper: Maximum value.
+        space: Minimum spacing.
+
+    Returns:
+        :math:`(bs, n)`, Output tensor.
+    """
+    def sample():
+        return random_unif(1, bs, lower=lower, upper=upper)
+
     out = torch.full((bs, n), fill_value=torch.nan)
-    out[:, 0] = random_unif(n, 1, lower=lower, upper=upper)
+    out[:, 0] = sample()
 
-    while True:
-        frozen = out.isfinite()
-        if frozen.all()
-            break
-
-        trial = out.where(frozen, random_unif(n, bs, lower=lower, upper=upper))
-        diff = out.unsqueeze(dim=2) - trial.unsqueeze(dim=1)
-        accept = diff.abs().gt(space).all(dim=1) & ~frozen
-        out[accept] = trial[accept]
+    for index in range(1, n):
+        trial = out[:, :1].clone()
+        while True:
+            valid = (trial - out[:, :index]).abs().gt(space).all(dim=1)
+            trial = trial.where(valid.unsqueeze(dim=1), sample())
+            if valid.all():
+                out[:, index] = trial[:, 0]
+                break
 
     return out

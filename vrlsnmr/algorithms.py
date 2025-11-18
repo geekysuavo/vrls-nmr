@@ -51,15 +51,15 @@ def ans(
     while m < m_final:
         m = ids.numel()
         n = adapt_size(m, n)
-        (mu, Gamma_diag, yhat, Sigma_diag) = vrls(y, ids, n=n, **vrls_kwargs)
+        (mu, gamma_diag, yhat, sigma_diag) = vrls(y, ids, n=n, **vrls_kwargs)
 
         mu = mu.roll(n // 2, dims=1)
-        Gamma_diag = Gamma_diag.roll(n // 2, dims=1)
+        gamma_diag = gamma_diag.roll(n // 2, dims=1)
 
         yhat = yhat.narrow(dim=1, start=0, length=n // 2)
-        Sigma_diag = Sigma_diag.narrow(dim=1, start=0, length=n // 2)
+        sigma_diag = sigma_diag.narrow(dim=1, start=0, length=n // 2)
 
-        objective = Sigma_diag.sum(dim=0).clone()
+        objective = sigma_diag.sum(dim=0).clone()
         objective[ids] = 0
 
         next_index = objective.argmax(keepdim=True)
@@ -67,7 +67,7 @@ def ans(
         ids = torch.cat((ids, next_index))
         y = torch.cat((y, y_next), dim=-1)
 
-    return (y, ids, mu, Gamma_diag, yhat, Sigma_diag)
+    return (y, ids, mu, gamma_diag, yhat, sigma_diag)
 
 
 @torch.inference_mode()
@@ -121,15 +121,15 @@ def vrls(
         mu[:, ids] = (Kinv @ y.unsqueeze(dim=-1)).squeeze(dim=-1)
         mu = torch.fft.fft(mu, norm="ortho") / w
 
-        Gamma_diag = op.xmarginal(Kinv, w, ids)
+        gamma_diag = op.xmarginal(Kinv, w, ids)
 
-        m2 = mu.abs().square() + Gamma_diag
+        m2 = mu.abs().square() + gamma_diag
         w = (xi / (m2 + eps)).sqrt()
 
     yhat = torch.fft.ifft(mu, norm="ortho")
-    Sigma_diag = op.ymarginal(Kinv, w, ids)
+    sigma_diag = op.ymarginal(Kinv, w, ids)
 
-    return (mu, Gamma_diag, yhat, Sigma_diag)
+    return (mu, gamma_diag, yhat, sigma_diag)
 
 
 @torch.inference_mode()
@@ -184,20 +184,20 @@ def vrls_ex(
         mu[:, ids] = (Kinv @ y.unsqueeze(dim=-1)).squeeze(dim=-1)
         mu = torch.fft.fft(mu, norm="ortho") / nu_w
 
-        Gamma_diag = op.xmarginal(Kinv, nu_w, ids)
-        Sigma_diag = op.ymarginal(Kinv, nu_w, ids)
+        gamma_diag = op.xmarginal(Kinv, nu_w, ids)
+        sigma_diag = op.ymarginal(Kinv, nu_w, ids)
 
-        m2 = mu.abs().square() + Gamma_diag
+        m2 = mu.abs().square() + gamma_diag
         nu_w = (nu_xi.unsqueeze(dim=-1) / (m2 + eps)).sqrt()
 
         nu_xi = (beta_xi / nu_w.reciprocal().sum(dim=-1)).sqrt()
 
         yhat = torch.fft.ifft(mu, norm="ortho")
         err = (y - yhat[:, ids]).abs().square().sum(dim=-1)
-        ess = err + Sigma_diag[:, ids].sum(dim=-1) / n
+        ess = err + sigma_diag[:, ids].sum(dim=-1) / n
         nu_tau = (beta_tau / ess).sqrt()
 
-    return (mu, Gamma_diag, yhat, Sigma_diag)
+    return (mu, gamma_diag, yhat, sigma_diag)
 
 
 @torch.inference_mode()
