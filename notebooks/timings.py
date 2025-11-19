@@ -1,0 +1,122 @@
+import marimo
+
+__generated_with = "0.17.8"
+app = marimo.App(width="medium")
+
+
+@app.cell
+def _():
+    import time
+
+    import matplotlib.pyplot as plt
+    import pandas as pd
+    import seaborn as sns
+    import torch
+    import torch.nn.functional as F
+
+    from vrlsnmr.algorithms import vrls, vrls_mf
+    from vrlsnmr.simulators import Signal
+    return F, Signal, pd, plt, sns, time, torch, vrls, vrls_mf
+
+
+@app.cell
+def _(Signal, torch):
+    ground_truth = Signal(
+        frequencies=torch.tensor([-0.083, -0.026, 0.038, 0.042, 0.074, 0.091]),
+        decayrates=torch.tensor([0.001, 0.001, 0.001, 0.001, 0.001, 0.001]),
+        amplitudes=torch.tensor([1.0, 1.0, 0.1, 0.3, 1.0, 0.9]),
+        phases=torch.tensor([0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+    )
+    return (ground_truth,)
+
+
+@app.cell
+def _():
+    sched = [
+        1, 2, 3, 5, 6, 8, 9, 11, 13, 16,
+        17, 19, 21, 25, 29, 33, 38, 46, 56, 58,
+        69, 73, 82, 98, 116, 118, 138, 165, 187, 199,
+        217, 235, 267, 310, 365, 408, 415, 457, 475, 510,
+        595, 615, 648, 660, 667, 738, 851, 872, 873, 959,
+        991,
+    ]
+    return (sched,)
+
+
+@app.cell
+def _(ground_truth, sched, torch):
+    sigma = 0.1
+    tau = 1 / sigma**2
+    xi = tau
+    n = 2048
+    niter = 1000
+
+    ids = torch.tensor(sched) - 1
+    y = ground_truth(ids, noise=sigma)
+
+    ids = ids.cuda()
+    y = y.cuda()
+    return ids, n, niter, sigma, tau, xi, y
+
+
+@app.cell
+def _(ids, n, niter, tau, vrls, vrls_mf, xi, y):
+    (mu, gamma_diag, yhat, sigma_diag) = vrls(y, ids, tau, xi, n, niter // 10)
+    (mu_fast, gamma_fast, _, _) = vrls_mf(y, ids, tau, xi, n, niter)
+
+    mu = mu.roll(n // 2).squeeze(dim=0)
+    mu_fast = mu_fast.roll(n // 2).squeeze(dim=0)
+    gamma_diag = gamma_diag.roll(n // 2).squeeze(dim=0)
+    gamma_fast = gamma_fast.roll(n // 2).squeeze(dim=0)
+    return mu, mu_fast
+
+
+@app.cell
+def _(F, ground_truth, mu, mu_fast, n, plt, sigma, torch):
+    t = torch.arange(n // 2)
+    spect = torch.fft.fft(
+        F.pad(ground_truth(t, noise=sigma), (0, n // 2)),
+        norm="ortho",
+    ).roll(n // 2)
+
+    plt.plot(mu.real.cpu())
+    plt.xlim((800, 1000))
+    plt.plot(mu_fast.real.cpu())
+    #plt.plot(spect.real.cpu(), alpha=0.5)
+    return
+
+
+@app.cell
+def _(ids, n, niter, pd, tau, time, vrls, vrls_mf, xi, y):
+    data = []
+
+    for bs in (1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024):
+        y_bs = y.expand(bs, -1)
+        for rep in range(3):
+            t0 = time.perf_counter()
+            _ = vrls(y_bs, ids, tau, xi, n, niter // 10)
+            t1 = time.perf_counter()
+            _ = vrls_mf(y_bs, ids, tau, xi, n, niter)
+            t2 = time.perf_counter()
+
+            datum = dict(num_replicas=bs, trial=rep, algo="vrls", time=t1 - t0)
+            data.append(datum)
+
+            datum = dict(num_replicas=bs, trial=rep, algo="vrls_mf", time=t2 - t1)
+            data.append(datum)
+
+    df = pd.DataFrame(data)
+    df
+    return (df,)
+
+
+@app.cell
+def _(df, sns):
+    ax = sns.lineplot(x="num_replicas", y="time", hue="algo", data=df)
+    ax.grid(alpha=0.2)
+    ax
+    return
+
+
+if __name__ == "__main__":
+    app.run()

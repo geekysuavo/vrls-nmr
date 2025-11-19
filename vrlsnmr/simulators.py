@@ -39,10 +39,10 @@ class Signal(nn.Module):
 
         self._batched = ndim == 2
         if self._batched:
-            frequencies = frequencies.unqsueeze(dim=1)
-            decayrates = decayrates.unqsueeze(dim=1)
-            amplitudes = amplitudes.unqsueeze(dim=1)
-            phases = phases.unqsueeze(dim=1)
+            frequencies = frequencies.unsqueeze(dim=1)
+            decayrates = decayrates.unsqueeze(dim=1)
+            amplitudes = amplitudes.unsqueeze(dim=1)
+            phases = phases.unsqueeze(dim=1)
 
         self.register_buffer("frequencies", frequencies)
         self.register_buffer("decayrates", decayrates)
@@ -69,15 +69,21 @@ class Signal(nn.Module):
         if self._batched:
             t = t.unsqueeze(dim=0)
 
-        t = t.unsqsueeze(dim=-1)
+        t = t.unsqueeze(dim=-1)
 
-        decay = torch.exp(-self.decayrates * t)
-        real = torch.cos(self.frequencies * t)
-        imag = torch.sin(self.frequencies * t)
+        decay = (-self.decayrates * t).exp()
+        real = self.amplitudes * (self.frequencies * t).cos() * decay
+        imag = self.amplitudes * (self.frequencies * t).sin() * decay
         ph = torch.complex(self.phases.cos(), self.phases.sin())
-        out = self.amplitudes * decay * ph * torch.complex(real, imag)
-        out = out.sum(dim=-1)
-        return out + torch.randn_like(out)
+        out = (ph * torch.complex(real, imag)).sum(dim=-1)
+        return out + noise * torch.randn_like(out)
+
+    def to_dict(self) -> dict[str, list]:
+        """Return a dictionary of signal parameters."""
+        return {
+            name: buffer.squeeze().tolist()
+            for name, buffer in self.named_buffers()
+        }
 
     @classmethod
     def build(
@@ -143,6 +149,22 @@ def random_chisq(n: int, bs: int, *, dof: int, mean: float) -> Tensor:
     return torch.randn(bs, n, dof).square().mean(dim=2).mul(mean)
 
 
+def random_normal(n: int, bs: int, *, mean: float, stdev: float) -> Tensor:
+    """
+    Build a tensor filled with normally distributed values.
+
+    Args:
+        n: Number of components.
+        bs: Number of replicas.
+        mean: Average value.
+        stdev: Standard deviation.
+
+    Returns:
+        :math:`(bs, n)`, Output tensor.
+    """
+    return torch.randn(bs, n).mul(stdev).add(mean)
+
+
 def random_unif(n: int, bs: int, *, lower: float, upper: float) -> Tensor:
     """
     Build a tensor filled with uniformly distributed values.
@@ -180,7 +202,7 @@ def random_spaced(
         return random_unif(1, bs, lower=lower, upper=upper)
 
     out = torch.full((bs, n), fill_value=torch.nan)
-    out[:, 0] = sample()
+    out[:, :1] = sample()
 
     for index in range(1, n):
         trial = out[:, :1].clone()
