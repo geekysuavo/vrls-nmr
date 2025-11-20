@@ -6,6 +6,13 @@ app = marimo.App(width="medium")
 
 @app.cell
 def _():
+    import marimo as mo
+    return (mo,)
+
+
+@app.cell
+def _():
+    import itertools
     import time
 
     import matplotlib.pyplot as plt
@@ -16,7 +23,7 @@ def _():
 
     from vrlsnmr.algorithms import vrls, vrls_mf
     from vrlsnmr.simulators import Signal
-    return F, Signal, pd, plt, sns, time, torch, vrls, vrls_mf
+    return F, Signal, itertools, pd, plt, sns, time, torch, vrls, vrls_mf
 
 
 @app.cell
@@ -87,22 +94,48 @@ def _(F, ground_truth, mu, mu_fast, n, plt, sigma, torch):
 
 
 @app.cell
-def _(ids, n, niter, pd, tau, time, vrls, vrls_mf, xi, y):
+def _(
+    ground_truth,
+    itertools,
+    mo,
+    niter,
+    pd,
+    sigma,
+    tau,
+    time,
+    torch,
+    vrls,
+    vrls_mf,
+    xi,
+):
     data = []
 
-    for bs in (1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024):
-        y_bs = y.expand(bs, -1)
+    bs_values = (1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024)
+    n_values = (64, 128, 256, 512, 1024, 2048)
+    m_values = (16, 32, 64)
+
+    for _bs, _n, _m in mo.status.progress_bar(
+        itertools.product(bs_values, n_values, m_values),
+        total=len(bs_values) * len(n_values) * len(m_values),
+    ):
+        if _m >= _n:
+            continue
+
+        _ids = torch.randperm(_n).narrow(dim=0, start=0, length=_m)
+        _y = ground_truth(_ids, noise=sigma).expand(_bs, -1).cuda()
+        _ids = _ids.cuda()
+
         for rep in range(3):
             t0 = time.perf_counter()
-            _ = vrls(y_bs, ids, tau, xi, n, niter // 10)
+            _ = vrls(_y, _ids, tau, xi, _n, niter // 10)
             t1 = time.perf_counter()
-            _ = vrls_mf(y_bs, ids, tau, xi, n, niter)
+            _ = vrls_mf(_y, _ids, tau, xi, _n, niter)
             t2 = time.perf_counter()
 
-            datum = dict(num_replicas=bs, trial=rep, algo="vrls", time=t1 - t0)
+            datum = dict(bs=_bs, m=_m, n=_n, trial=rep, Algorithm="VRLS", time=t1 - t0)
             data.append(datum)
 
-            datum = dict(num_replicas=bs, trial=rep, algo="vrls_mf", time=t2 - t1)
+            datum = dict(bs=_bs, m=_m, n=_n, trial=rep, Algorithm="FMF-VRLS", time=t2 - t1)
             data.append(datum)
 
     df = pd.DataFrame(data)
@@ -112,8 +145,10 @@ def _(ids, n, niter, pd, tau, time, vrls, vrls_mf, xi, y):
 
 @app.cell
 def _(df, sns):
-    ax = sns.lineplot(x="num_replicas", y="time", hue="algo", data=df)
+    ax = sns.lineplot(x="bs", y="time", hue="Algorithm", style="m", data=df)
     ax.grid(alpha=0.2)
+    ax.set_xlabel("Number of parallel reconstructions")
+    ax.set_ylabel("Reconstruction time")
     ax
     return
 

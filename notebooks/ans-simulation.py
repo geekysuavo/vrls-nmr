@@ -41,6 +41,7 @@ def _(algo, ground_truth, partial):
     niter = 100
 
     (y, ids, mu, gamma_diag, yhat, sigma_diag) = algo.ans(
+        model=algo.vrls,
         measure=partial(ground_truth, noise=sigma),
         m_initial=16,
         m_final=64,

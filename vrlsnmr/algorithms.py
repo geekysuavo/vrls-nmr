@@ -5,28 +5,36 @@ from torch import Tensor
 
 import vrlsnmr.operators as op
 
+AlgorithmReturnType = tuple[Tensor, Tensor, Tensor, Tensor]
+AlgorithmFunc = Callable[[Tensor, Tensor, ...], AlgorithmReturnType]
+MeasurementFunc = Callable[[int], Tensor]
+
 
 def ans(
-    measure: Callable[[int], Tensor],
+    model: AlgorithmFunc,
+    measure: MeasurementFunc,
     m_initial: int,
     m_final: int,
     n_initial: int,
     n_final: int,
     min_sparsity: float,
-    **vrls_kwargs: int | float,
+    **kwargs: bool | int | float,
 ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
     """
-    Active nonuniform sampling (ANS) using :func:`vrls`.
+    Active nonuniform sampling (ANS).
 
     Args:
+        model: Reconstruction function accepting measured data with indices
+            and returning frequency- and time-domain means and variances.
+            See :func:`vrls` for a candidate function.
         measure: Measurement function accepting a grid point to observe
             and returning a :math:`(1)` or :math:`(b, 1)` complex tensor.
         m_initial: Initial number of (uniform) measurements.
         m_final: Final (total) number of measurements.
         n_initial: Initial (minimum) Fourier grid size.
         n_final: Final (maximum) Fourier grid size.
-        min_sparsity: Minimum sparsity maintained for :func:`vrls`.
-        vrls_kwargs: Keyword arguments passed to :func:`vrls`.
+        min_sparsity: Minimum sparsity maintained for :attr:`model`.
+        kwargs: Keyword arguments passed to :attr:`model`.
 
     Returns:
         A :class:`tuple` containing
@@ -51,7 +59,7 @@ def ans(
     while m < m_final:
         m = ids.numel()
         n = adapt_size(m, n)
-        (mu, gamma_diag, yhat, sigma_diag) = vrls(y, ids, n=n, **vrls_kwargs)
+        (mu, gamma_diag, yhat, sigma_diag) = model(y, ids, n=n, **kwargs)
 
         mu = mu.roll(n // 2, dims=1)
         gamma_diag = gamma_diag.roll(n // 2, dims=1)
@@ -79,7 +87,7 @@ def vrls(
     n: int,
     niter: int,
     eps: float = 1.0e-9,
-) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+) -> AlgorithmReturnType:
     """
     Basic VRLS.
 
@@ -141,7 +149,7 @@ def vrls_ex(
     n: int,
     niter: int,
     eps: float = 1.0e-9,
-) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+) -> AlgorithmReturnType:
     """
     Extended VRLS.
 
@@ -209,7 +217,8 @@ def vrls_mf(
     n: int,
     niter: int,
     eps: float = 1.0e-9,
-) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+    full_var: bool = False,
+) -> AlgorithmReturnType:
     """
     Fast mean-field VRLS.
 
@@ -221,6 +230,8 @@ def vrls_mf(
         n: Sparse dimension size.
         niter: Number of iterations.
         eps: Weight update positivity parameter.
+        full_var: When true, recompute marginal variances using the final
+            mean-field weights and a full :func:`vrls` kernel matrix.
 
     Returns:
         A :class:`tuple` containing
@@ -265,6 +276,14 @@ def vrls_mf(
         gamma = (tau * AtA_diag + w).reciprocal()
 
     yhat = torch.fft.ifft(mu, norm="ortho")
-    sigma = gamma.mean(dim=1, keepdim=True).expand_as(yhat)
+
+    if full_var:
+        tau = w.new_full((bs,), tau)
+        K = op.kernel(w, tau, ids)
+        Kinv = torch.linalg.inv(K)
+        gamma = op.xmarginal(Kinv, w, ids)
+        sigma = op.ymarginal(Kinv, w, ids)
+    else:
+        sigma = gamma.mean(dim=1, keepdim=True).expand_as(yhat)
 
     return (mu, gamma, yhat, sigma)

@@ -9,6 +9,7 @@ from vrlsnmr.algorithms import vrls, vrls_ex, vrls_mf
 
 def test_vrls():
     (bs, k, m, n) = (4, 10, 50, 100)
+    niter = 10
     stdev = 0.01
     tau = 1 / stdev**2
     xi = tau
@@ -35,12 +36,12 @@ def test_vrls():
     y = y.squeeze(dim=2)
     assert y.shape == (bs, m)
 
-    out_cpu = vrls(y, ids, tau, xi, n, 10)
+    out_cpu = vrls(y, ids, tau, xi, n, niter)
 
     y = y.cuda()
     ids = ids.cuda()
 
-    out_cuda = vrls(y, ids, tau, xi, n, 10)
+    out_cuda = vrls(y, ids, tau, xi, n, niter)
 
     assert len(out_cpu) == len(out_cuda)
     for x_cpu, x_cuda in zip(out_cpu, out_cuda):
@@ -52,6 +53,7 @@ def test_vrls():
 
 def test_vrls_ex():
     (bs, k, m, n) = (4, 10, 50, 100)
+    niter = 10
     stdev = 0.01
     beta_tau = 1e6
     beta_xi = 1e6
@@ -78,12 +80,12 @@ def test_vrls_ex():
     y = y.squeeze(dim=2)
     assert y.shape == (bs, m)
 
-    out_cpu = vrls_ex(y, ids, beta_tau, beta_xi, n, 10)
+    out_cpu = vrls_ex(y, ids, beta_tau, beta_xi, n, niter)
 
     y = y.cuda()
     ids = ids.cuda()
 
-    out_cuda = vrls_ex(y, ids, beta_tau, beta_xi, n, 10)
+    out_cuda = vrls_ex(y, ids, beta_tau, beta_xi, n, niter)
 
     assert len(out_cpu) == len(out_cuda)
     for x_cpu, x_cuda in zip(out_cpu, out_cuda):
@@ -93,8 +95,10 @@ def test_vrls_ex():
     assert xmean.abs().gt(0.5).sum(dim=1).eq(k).all()
 
 
-def test_vrls_mf():
+@pytest.mark.parametrize("full_var", (False, True))
+def test_vrls_mf(full_var):
     (bs, k, m, n) = (4, 10, 50, 100)
+    niter = 100
     stdev = 0.01
     tau = 1 / stdev**2
     xi = tau
@@ -121,12 +125,12 @@ def test_vrls_mf():
     y = y.squeeze(dim=2)
     assert y.shape == (bs, m)
 
-    out_cpu = vrls_mf(y, ids, tau, xi, n, 100)
+    out_cpu = vrls_mf(y, ids, tau, xi, n, niter, full_var=full_var)
 
     y = y.cuda()
     ids = ids.cuda()
 
-    out_cuda = vrls_mf(y, ids, tau, xi, n, 100)
+    out_cuda = vrls_mf(y, ids, tau, xi, n, niter, full_var=full_var)
 
     assert len(out_cpu) == len(out_cuda)
     for x_cpu, x_cuda in zip(out_cpu, out_cuda):
