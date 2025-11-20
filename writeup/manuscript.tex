@@ -336,7 +336,7 @@ gradually increases the size of its grid $n$ using a CS-inspired heuristic,
 n_* = \sup\left\{
   n \le n_{\max}
  \mid
-  m/n > \varepsilon \log(1/\varepsilon)
+  m/n > \varepsilon
  \right\}
 \end{equation}
 where $\varepsilon \in (0,1)$ is a rough estimate of the sparsity of
@@ -345,6 +345,26 @@ the signal, i.e.~the fraction of nonzero elements of $\m{x}$.
 % ============================================================================
 \section{Materials and methods}
 \label{sec:methods}
+
+\subsection{Datasets}
+\label{subsec:datasets}
+To evaluate the performance of VRLS on realistic NUS data, a
+two-dimensional gradient-enhanced $^1$H--$^{15}$N HSQC dataset
+that was initially described in \cite{worley:jmr2016a} was reconstructed
+from 5\%-sparse quadrature measurements ($m=51, n=1024$). Synthetic data
+were generated to test ANS across a broad variety of signal parameters.
+All simulated signals have the form
+\begin{equation}
+y(t) = \sum_{c=1}^{n_c} \alpha_c \exp\left\{
+  2 \pi (i \omega_c - \rho_c) t + i \theta_c
+ \right\} + \epsilon
+\end{equation}
+with amplitudes $\{\alpha_c\}$ drawn from a scaled chi-squared distribution,
+frequencies $\{\omega_c\}$ drawn from a uniform distribution, decay rates
+$\{\rho_c\}$ drawn from a scaled chi-squared distribution, and phase
+shifts $\{\theta_c\}$ drawn from a normal distribution. The noise
+$\epsilon$ is drawn from a normal distribution with variance
+$\sigma^2 = 1/\tau$.
 
 \subsection{Software implementation}
 \label{subsec:impl}
@@ -357,26 +377,31 @@ CUDA \cite{nickolls:siggraph2008} on the GPU. Accelerating computations
 on the GPU is important for minimizing the time required to propose new
 grid points for sampling, and PyTorch provides many highly optimized
 linear algebra and FFT operators for the GPU, making it an ideal
-framework for an ANS algorithm.
+framework for prototyping an ANS algorithm.
 
 \subsection{Software benchmarking}
 \label{subsec:bench}
+All benchmarks and analyses were conducted on a 2.6 GHz Intel Xeon
+8000-series 32-core machine with 226 GiB RAM and a single NVIDIA A10 GPU
+(24 GB). The differing runtimes and convergence rates of standard and
+mean-field VRLS were compared on simulated signals to assess suitability
+for ANS, and full ANS experiments were simulated in order to analyze the
+resulting schedules and determine the conditions in which successful ANS
+acquisition is feasible.
+
 % begin notes to delete
-Please fix me.
 \begin{itemize}
-\item Reconstructions of my 5\% NUS 1H-15N HSQC
+\item Reconstruct my 5\% NUS 1H-15N HSQC
 \item Compare quality and convergence rate of VRLS to VRLS-FMF
 \item Analyze runtime as $m$ increases for selected fixed $n$
 \item Simulate ANS using synthetic data
-\item Look at PSFs from synthetic ANS runs on same signal
-\item Look at $\ell_2$ error and $F$ rates--better than unif./exp.~bias?
-\item Should we include an exponential bias in the variance?
+\begin{itemize}
+ \item Look at PSFs from synthetic ANS runs on same signal
+ \item Look at $\ell_2$ error of spectral estimates
+ \item Manually exponentially bias the variance?
+\end{itemize}
 \end{itemize}
 % end notes to delete
-
-\subsection{Datasets}
-\label{subsec:datasets}
-Please fix me.
 
 % ============================================================================
 \section{Results}
