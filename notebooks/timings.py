@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.17.8"
+__generated_with = "0.18.0"
 app = marimo.App(width="medium")
 
 
@@ -149,6 +149,7 @@ def _(df, sns):
     ax.grid(alpha=0.2)
     ax.set_xlabel("Number of parallel reconstructions")
     ax.set_ylabel("Reconstruction time")
+    ax.set_yscale("log")
     ax
     return
 

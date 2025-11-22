@@ -42,7 +42,7 @@ def _(algo, ground_truth, mo, partial, product, torch):
     n = 2048
     niter = 100
 
-    num_replicates = 100
+    num_replicates = 1000
     sigma_values = (0.01, 0.05, 0.1, 0.5)
 
     schedules = torch.zeros(
@@ -76,30 +76,77 @@ def _(algo, ground_truth, mo, partial, product, torch):
 
 @app.cell
 def _(n, plt, schedules, torch):
-    pdf = schedules.mean(dim=1).cpu()
-    plt.bar(torch.arange(n // 2), pdf[0])
+    n_pdf = n // 4
+
+    pdf = schedules.mean(dim=1).narrow(dim=1, start=0, length=n_pdf).cpu()
+    plt.bar(torch.arange(n_pdf), pdf[0])
     return
 
 
 @app.cell
-def _(n, plt, schedules, torch):
+def _(n, schedules, torch):
     psf = (
         torch.fft.fft(schedules.cfloat(), dim=-1, norm="ortho")
         .roll(n // 4, dims=-1)
         .abs()
         .cpu()
     )
+    return (psf,)
 
-    psf_mean = psf[0].mean(dim=0)
-    psf_std = psf[0].std(dim=0)
 
-    plt.fill_between(
-        x=torch.arange(n // 2),
-        y1=psf_mean - 5 * psf_std,
-        y2=psf_mean + 5 * psf_std,
+@app.cell
+def _(n, plt, psf, torch):
+    _x = torch.linspace(-0.5, 0.5, n // 2)
+    _mean = psf[0].mean(dim=0)
+    _std = psf[0].std(dim=0)
+
+    (_, _ax) = plt.subplots()
+    _ax.fill_between(
+        x=_x,
+        y1=_mean - 3 * _std,
+        y2=_mean + 3 * _std,
         alpha=0.2,
     )
-    plt.plot(psf_mean)
+    _ax.plot(_x, _mean)
+    _ax.set_xlabel("Frequency / a.u.")
+    _ax.set_xlim((-0.5, 0.5))
+    _ax.set_yticks([-0.5, 0.0, 0.5, 1.0, 1.5, 2.0], labels=[])
+    _ax.grid(alpha=0.2)
+
+    _axin = _ax.inset_axes((0.65, 0.65, 0.3, 0.3))
+    _axin.plot(_x, _mean)
+    _axin.set_xlim((-0.1, 0.1))
+    _axin.set_yticks([])
+
+    _ax
+    return
+
+
+@app.cell
+def _(n, plt, psf, torch):
+    _x = torch.linspace(-0.5, 0.5, n // 2)
+    _mean = psf[3].mean(dim=0)
+    _std = psf[3].std(dim=0)
+
+    (_, _ax) = plt.subplots()
+    _ax.fill_between(
+        x=_x,
+        y1=_mean - 3 * _std,
+        y2=_mean + 3 * _std,
+        alpha=0.2,
+    )
+    _ax.plot(_x, _mean)
+    _ax.set_xlim((-0.5, 0.5))
+    _ax.set_xlabel("Frequency / a.u.")
+    _ax.set_yticks([-0.5, 0.0, 0.5, 1.0, 1.5, 2.0], labels=[])
+    _ax.grid(alpha=0.2)
+
+    _axin = _ax.inset_axes((0.65, 0.65, 0.3, 0.3))
+    _axin.plot(_x, _mean)
+    _axin.set_xlim((-0.1, 0.1))
+    _axin.set_yticks([])
+
+    _ax
     return
 
 
