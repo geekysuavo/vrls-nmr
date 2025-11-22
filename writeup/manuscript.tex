@@ -142,6 +142,7 @@ However, this practice is necessary to meet the speed requirement of ANS.
 We begin with the standard fixed-basis \cite{worley:cmr2018}
 measurement model,
 \begin{equation}
+\label{eq:signalmodel}
 \boldsymbol{y} = \m{A} \m{x} + \m{\epsilon}
 \end{equation}
 where $\m{y}$ are the observed time-domain data, $\m{x}$ is the spectrum
@@ -160,7 +161,7 @@ Placing a normal prior distribution on each spectral value,
 \begin{equation}
 p(x_i \mid w_i) =
  (2 \pi)^{-\frac{1}{2}} w_i^{\frac{1}{2}} \exp\left\{
-  -\frac{1}{2} w_i x_i^2
+  -\frac{1}{2} w_i |x_i|^2
  \right\}
 \end{equation}
 and an inverse-gamma distribution on the precisions $w_i$ of said prior,
@@ -178,7 +179,7 @@ p(&\m{y}, \m{x}, \m{w} \mid \xi, \tau) \propto \\
  & \left( {\textstyle\prod}_i w_i^{-\frac{3}{2}} \right)
  \exp\left\{
   -\frac{\tau}{2} \| \m{y} - \m{A} \m{x} \|_2^2
-  -\frac{1}{2} {\textstyle\sum}_i \left( w_i x_i^2 + \xi w_i^{-1} \right)
+  -\frac{1}{2} {\textstyle\sum}_i \left( w_i |x_i|^2 + \xi w_i^{-1} \right)
  \right\}
 \end{aligned}
 \end{equation}
@@ -209,8 +210,8 @@ q_x(\m{x}) &= \mathcal{N}(\m{\mu}, \m{\Gamma})
 \\
 q_w(w_i) &= \mathcal{IN}(\nu_i, \lambda_i)
 \end{align}
-we rewrite $F(q)$ as a function of the nontrivial parameters of $q$,
-namely $\m{\eta} = \{ \m{\mu}, \m{\Gamma}, \m{\nu} \}$,
+we rewrite the functional $F(q)$ as a function of the nontrivial
+parameters of $q$, namely $\m{\eta} = \{ \m{\mu}, \m{\Gamma}, \m{\nu} \}$,
 \begin{equation}
 \begin{aligned}
 F(\m{\eta}) &=
@@ -218,7 +219,7 @@ F(\m{\eta}) &=
 +\frac{\tau}{2} \mathrm{tr}(\m{A}^\top \m{A} \m{\Gamma})
 -\frac{1}{2} \ln\det\m{\Gamma}
 \\ &
-+\frac{1}{2} {\textstyle\sum}_i \nu_i (\mu_i^2 + \Gamma_{ii})
++\frac{1}{2} {\textstyle\sum}_i \nu_i (|\mu_i|^2 + \Gamma_{ii})
 +\frac{\xi}{2} {\textstyle\sum}_i \nu_i^{-1}
 \end{aligned}
 \end{equation}
@@ -237,7 +238,7 @@ The VRLS algorithm is obtained by directly applying alternating minimization
 to $F(\m{\eta})$. The simplest of these updates is that of the weights
 $\m{\nu}$, which is obtained by setting $\partial\nu_i = 0$ and solving,
 \begin{equation}
-\nu_i \gets \sqrt{\xi (\mu_i^2 + \Gamma_{ii})^{-1}}
+\nu_i \gets \sqrt{\xi (|\mu_i|^2 + \Gamma_{ii})^{-1}}
 \end{equation}
 which mirrors the $\ell_1$-IRLS update of $w_i \gets |x_i|^{-1}$ with
 several interesting advantages. In IRLS, a small correction term $c$ is
@@ -333,6 +334,7 @@ successful reconstructions are expected. To overcome this, ANS begins
 with an initial number of measurements $m_0 > 1$ uniformly sampled, and
 gradually increases the size of its grid $n$ using a CS-inspired heuristic,
 \begin{equation}
+\label{eq:gridsize}
 n_* = \sup\left\{
   n \le n_{\max}
  \mid
@@ -389,25 +391,28 @@ for ANS, and full ANS experiments were simulated in order to analyze the
 resulting schedules and determine the conditions in which successful ANS
 acquisition is feasible.
 
-% begin notes to delete
-\begin{itemize}
-\item Reconstruct my 5\% NUS 1H-15N HSQC
-\item Compare quality and convergence rate of VRLS to VRLS-FMF
-\item Analyze runtime as $m$ increases for selected fixed $n$
-\item Simulate ANS using synthetic data
-\begin{itemize}
- \item Look at PSFs from synthetic ANS runs on same signal
- \item Look at $\ell_2$ error of spectral estimates
- \item Manually exponentially bias the variance?
-\end{itemize}
-\end{itemize}
-% end notes to delete
-
 % ============================================================================
 \section{Results}
 \label{sec:results}
 Please fix me.
 
+% begin notes to delete
+\begin{itemize}
+ \item Reconstruct my 5\% NUS 1H-15N HSQC
+ \item Compare quality/convergence of VRLS to VRLS-FMF
+ \item Analyze runtime as $m$ increases for selected fixed $n$
+ \item Simulate ANS using synthetic data
+ \begin{itemize}
+  \item Look at PDFs/PSFs from ANS runs on same signal
+  \item Schedule characteristics depend on $n$-heuristic
+  \item Look at $\ell_2$ error of spectral estimates
+  \item Manually exponentially bias the variance?
+  \item Post-hoc variance computation fails in ANS
+ \end{itemize}
+ \item VRLS convex, globally convergent
+ \item $\Gamma_{ii}$ useful as an ``artifact meter''
+\end{itemize}
+% end notes to delete
 
 %\begin{table}[t]
 %\centering
@@ -428,7 +433,47 @@ Please fix me.
 % ============================================================================
 \section{Conclusions}
 \label{sec:concl}
-Please fix me.
+The development of VRLS in this work takes active nonuniform sampling from
+the slow, infeasible theoretical possibility presented in
+\cite{worley:cmr2018} and progresses it into a practical methodology.
+By carefully constructing a joint density \eqref{eq:joint} that
+marginalizes to a Laplace prior on $\m{x}$, VRLS avoids complexities
+faced by its alternatives like sparse Bayesian learning
+(SBL, \cite{worley:ieeetsp2019}). By retaining just enough structure
+in $q(\m{x}, \m{w})$ and leveraging the partial Fourier nature of the
+measurement matrix $\m{A}$, VRLS efficiently estimates marginal variances
+that enable post-reconstruction quality checking and active sampling.
+VRLS is well-suited to GPU acceleration due to the embarrassingly parallel
+nature of marginal variance estimation; planned optimizations to the CUDA
+implementation are expected to further improve runtime as $m$ increases.
+
+Certain characteristics of ANS still warrant further examination.
+For example, refinement of the grid size heuristic \eqref{eq:gridsize}
+could nudge the algorithm towards producing sampling schedules with more
+homogenous time-domain coverage, even though it remains to be seen whether
+this is more than an aesthetic flaw. Perhaps most obviously, further work
+is needed to extend VRLS to multidimensional data where the advantages of
+NUS are greater. Doing so is largely an engineering exercise that will
+require careful indexing and multi-complex FFTs, as nothing in VRLS
+precludes its generalization to higher dimensionalities.
+
+To the author's knowledge, VRLS is the first algorithm to satisfy the
+desiderata of ANS and consequently enable model-based active learning
+on NMR spectrometers. However, it remains limited in many important
+aspects. Principal among these limitations its its continued use of a
+fixed-basis signal model \eqref{eq:signalmodel}, which discards
+nearly all available prior information about the ground truth signal in
+exchange for the use of a fast Fourier transform and a downstream cascade
+of signal processing, peak picking, and so on. Prior knowledge of
+experimental parameters, the number of resonances and their relationships
+in protein samples, or the contributions of possible analytes in complex
+mixtures, are all prime candidates for Bayesian modeling. While such
+parametric signal models are currently too slow for ANS, they promise
+the dual advantages of (i) further reducing acquisition time by leveraging
+prior information and (ii) providing spectroscopists with richer and more
+immediate experimental results. Indeed, further work is needed to develop
+Bayesian NMR signal models that make full use of available prior knowledge
+while also admitting active learning.
 
 % ============================================================================
 \appendix
