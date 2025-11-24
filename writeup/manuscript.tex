@@ -214,6 +214,7 @@ we rewrite the functional $F(q)$ as a function of the nontrivial
 parameters of $q$, namely $\m{\eta} = \{ \m{\mu}, \m{\Gamma}, \m{\nu} \}$,
 \begin{equation}
 \begin{aligned}
+\label{eq:objective}
 F(\m{\eta}) &=
  \frac{\tau}{2} \| \m{y} - \m{A} \m{\mu} \|_2^2
 +\frac{\tau}{2} \mathrm{tr}(\m{A}^\top \m{A} \m{\Gamma})
@@ -280,6 +281,10 @@ diagonal elements of $\m{\Phi} \m{\Gamma} \m{\Phi}^\top$. Both of these
 benefit from kernelization, requiring only $\mathcal{O}(m^2 n)$ operations.
 Detailed derivations of these computations are provided in the
 \nameref{app:si}.
+
+To summarize, VRLS is a globally convergent algorithm that minimizes the
+convex objective function \eqref{eq:objective}, with a per-iteration cost
+of $\mathcal{O}(n \log n + m^2 n + m^3)$ operations.
 
 \subsection{Extensions to VRLS}
 \label{subsec:extensions}
@@ -353,19 +358,26 @@ the signal, i.e.~the fraction of nonzero elements of $\m{x}$.
 To evaluate the performance of VRLS on realistic NUS data, a
 two-dimensional gradient-enhanced $^1$H--$^{15}$N HSQC dataset
 that was initially described in \cite{worley:jmr2016a} was reconstructed
-from 5\%-sparse quadrature measurements ($m=51, n=1024$). Synthetic data
-were generated to test ANS across a broad variety of signal parameters.
-All simulated signals have the form
+from 4\%-sparse quadrature measurements ($m=40, n=1024$). One hundred
+iterations of VRLS were performed with $\tau$ and $\xi$ fixed to
+$1/\sigma^2$, where $\sigma$ was estimated by manual inspection of
+the first transient.
+
+Synthetic data were generated to test ANS across a broad variety of
+signal parameters. All simulated signals have the form
 \begin{equation}
 y(t) = \sum_{c=1}^{n_c} \alpha_c \exp\left\{
   2 \pi (i \omega_c - \rho_c) t + i \theta_c
  \right\} + \epsilon
 \end{equation}
-with amplitudes $\{\alpha_c\}$ drawn from a scaled chi-squared distribution,
-frequencies $\{\omega_c\}$ drawn from a uniform distribution, decay rates
-$\{\rho_c\}$ drawn from a scaled chi-squared distribution, and phase
-shifts $\{\theta_c\}$ drawn from a normal distribution. The noise
-$\epsilon$ is drawn from a normal distribution with variance
+with amplitudes $\{\alpha_c\}$ drawn from a scaled chi-squared distribution
+having $\delta_\alpha$ degrees of freedom and mean $\bar\alpha$,
+frequencies $\{\omega_c\}$ drawn from a uniform distribution spanning
+the entire spectral width, decay rates $\{\rho_c\}$ drawn from a scaled
+chi-squared distribution with $\delta_\rho$ degrees of freedom and mean
+$\bar\rho$, and phase shifts $\{\theta_c\}$ drawn from a normal
+distribution with zero mean and standard deviation $s_\theta$.
+The noise $\epsilon$ is drawn from a normal distribution with variance
 $\sigma^2 = 1/\tau$.
 
 \subsection{Software implementation}
@@ -394,23 +406,42 @@ acquisition is feasible.
 % ============================================================================
 \section{Results}
 \label{sec:results}
+
+\subsection{Reconstruction quality and runtime}
+\label{subsec:vrlsresults}
+As illustrated by Figure \ref{fig:fixme}, VRLS is a capable NUS
+reconstruction method on its own, given data acquired from a fixed
+schedule. While VRLS provides a point estimate of the spectrum in
+$\m{\mu}$, it also provides a variance $\Gamma_{ii}$ with each spectral
+point $\mu_i$. Because $q_x(\m{x})$ is an approximation of the intractable
+exact posterior $p(\m{x} \mid \m{y}, \xi, \tau)$, the variances from VRLS
+tend to under-estimate the true posterior variances
+\cite{wainwright:ftml2008}. Nevertheless, they are useful for
+distinguishing truly recovered signals from artifacts.
+
+When posterior variance estimates are not required, fast mean-field
+(FMF) VRLS can provide mean estimates $\m{\mu}$ of equal quality to
+VRLS without requiring the storage or inversion of matrices. However,
+the matrix-free advantage of FMF-VRLS comes with disadvantages. Because
+FMF-VRLS neglects posterior correlations between spectral points, it
+dramatically under-estimates frequency domain posterior variance,
+and completely fails to usefully estimate time-domain posterior variance.
+Moreover, it often requires an order of magnitude more iterations than
+VRLS to converge. Figure \ref{fig:fixme} summarizes this effect: for
+sufficiently small $m$ (high undersampling), VRLS requires less time than
+FMF-VRLS to converge to an equivalent or better mean estimate.
+
+\subsection{Active nonuniform sampling simulations}
+\label{subsec:ansresults}
 Please fix me.
 
 % begin notes to delete
 \begin{itemize}
- \item Reconstruct my 5\% NUS 1H-15N HSQC
- \item Compare quality/convergence of VRLS to VRLS-FMF
- \item Analyze runtime as $m$ increases for selected fixed $n$
- \item Simulate ANS using synthetic data
- \begin{itemize}
-  \item Look at PDFs/PSFs from ANS runs on same signal
-  \item Schedule characteristics depend on $n$-heuristic
-  \item Look at $\ell_2$ error of spectral estimates
-  \item Manually exponentially bias the variance?
-  \item Post-hoc variance computation fails in ANS
- \end{itemize}
- \item VRLS convex, globally convergent
- \item $\Gamma_{ii}$ useful as an ``artifact meter''
+\item Look at PDFs/PSFs from ANS runs on same signal
+\item Schedule characteristics depend on $n$-heuristic
+\item Look at $\ell_2$ error of spectral estimates
+\item Manually exponentially bias the variance?
+\item Post-hoc variance computation fails in ANS
 \end{itemize}
 % end notes to delete
 
@@ -438,7 +469,7 @@ the slow, infeasible theoretical possibility presented in
 \cite{worley:cmr2018} and progresses it into a practical methodology.
 By carefully constructing a joint density \eqref{eq:joint} that
 marginalizes to a Laplace prior on $\m{x}$, VRLS avoids complexities
-faced by its alternatives like sparse Bayesian learning
+faced by non-convex alternative algorithms like sparse Bayesian learning
 (SBL, \cite{worley:ieeetsp2019}). By retaining just enough structure
 in $q(\m{x}, \m{w})$ and leveraging the partial Fourier nature of the
 measurement matrix $\m{A}$, VRLS efficiently estimates marginal variances
