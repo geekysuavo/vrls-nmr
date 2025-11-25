@@ -286,6 +286,17 @@ To summarize, VRLS is a globally convergent algorithm that minimizes the
 convex objective function \eqref{eq:objective}, with a per-iteration cost
 of $\mathcal{O}(n \log n + m^2 n + m^3)$ operations.
 
+\begin{figure*}[t]
+\centering
+\includegraphics[width=1.0\textwidth,height=200.0pt]{example-image-a}
+\caption{%
+ (a) An $^1$H--$^{15}$N HSQC spectrum reconstructed from 4\%-sparse
+ measurements using VRLS. (b) One-dimensional slice taken from the
+ reconstruction in (a) with its accompanying variance estimate.
+}
+\label{fig:hsqc}
+\end{figure*}
+
 \subsection{Extensions to VRLS}
 \label{subsec:extensions}
 While VRLS only requires handling a small $m \times m$ kernel matrix, it
@@ -353,6 +364,18 @@ the signal, i.e.~the fraction of nonzero elements of $\m{x}$.
 \section{Materials and methods}
 \label{sec:methods}
 
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.48\textwidth]{example-image-a}
+\caption{%
+ Runtimes of VRLS ($n_{\mathrm{iter}}=100$) and
+ FMF-VRLS ($n_{\mathrm{iter}}=1000$) as a function of measurement
+ count $m$, grid point count $n$, and number of parallel reconstructions
+ $p$. Times are reported on a logarithmic scale.
+}
+\label{fig:time}
+\end{figure}
+
 \subsection{Datasets}
 \label{subsec:datasets}
 To evaluate the performance of VRLS on realistic NUS data, a
@@ -366,6 +389,7 @@ the first transient.
 Synthetic data were generated to test ANS across a broad variety of
 signal parameters. All simulated signals have the form
 \begin{equation}
+\label{eq:truth}
 y(t) = \sum_{c=1}^{n_c} \alpha_c \exp\left\{
   2 \pi (i \omega_c - \rho_c) t + i \theta_c
  \right\} + \epsilon
@@ -377,8 +401,23 @@ the entire spectral width, decay rates $\{\rho_c\}$ drawn from a scaled
 chi-squared distribution with $\delta_\rho$ degrees of freedom and mean
 $\bar\rho$, and phase shifts $\{\theta_c\}$ drawn from a normal
 distribution with zero mean and standard deviation $s_\theta$.
-The noise $\epsilon$ is drawn from a normal distribution with variance
-$\sigma^2 = 1/\tau$.
+The noise $\epsilon$ is drawn from a normal distribution with standard
+deviation $\sigma$.
+
+ANS experiments were simulated using synthetic data generated according
+to equation \eqref{eq:truth} across a range of signal parameters
+(cf.~\nameref{app:si}). In all simulations, one hundred iterations of
+VRLS were run after each acquired time point with $\tau$ and $\xi$ fixed
+to $1/\sigma^2$. All reconstructions used a time-domain grid of 1,024
+points, and one eighth of the total acquisition budget was used to
+uniformly sample an initial set of grid points near $t=0$,
+i.e.~$m_0 = m_{\mathrm{final}}/8$
+where $m_{\mathrm{final}} = \varepsilon n_{\max}$. Runtimes and
+spectral reconstruction mean-squared errors (MSE) of the form
+\begin{equation}
+L(\m{\mu}; \m{x}) = n_{\max}^{-1} \| \m{x} - \m{\mu} \|_2^2
+\end{equation}
+were computed for each ANS experiment.
 
 \subsection{Software implementation}
 \label{subsec:impl}
@@ -409,7 +448,7 @@ acquisition is feasible.
 
 \subsection{Reconstruction quality and runtime}
 \label{subsec:vrlsresults}
-As illustrated by Figure \ref{fig:fixme}, VRLS is a capable NUS
+As illustrated by Figure \ref{fig:hsqc}, VRLS is a capable NUS
 reconstruction method on its own, given data acquired from a fixed
 schedule. While VRLS provides a point estimate of the spectrum in
 $\m{\mu}$, it also provides a variance $\Gamma_{ii}$ with each spectral
@@ -427,9 +466,19 @@ FMF-VRLS neglects posterior correlations between spectral points, it
 dramatically under-estimates frequency domain posterior variance,
 and completely fails to usefully estimate time-domain posterior variance.
 Moreover, it often requires an order of magnitude more iterations than
-VRLS to converge. Figure \ref{fig:fixme} summarizes this effect: for
+VRLS to converge. Figure \ref{fig:time} summarizes this effect: for
 sufficiently small $m$ (high undersampling), VRLS requires less time than
 FMF-VRLS to converge to an equivalent or better mean estimate.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.48\textwidth]{example-image-a}
+\caption{%
+ Reconstruction errors produced from ANS simulations of signals
+ with randomly generated parameters.
+}
+\label{fig:ans}
+\end{figure}
 
 \subsection{Active nonuniform sampling simulations}
 \label{subsec:ansresults}
@@ -437,9 +486,7 @@ Please fix me.
 
 % begin notes to delete
 \begin{itemize}
-\item Look at PDFs/PSFs from ANS runs on same signal
-\item Schedule characteristics depend on $n$-heuristic
-\item Look at $\ell_2$ error of spectral estimates
+\item Look at MSE of spectral estimates
 \item Manually exponentially bias the variance?
 \item Post-hoc variance computation fails in ANS
 \end{itemize}
@@ -455,11 +502,46 @@ Please fix me.
 %\caption{Table Caption}\label{fig1}
 %\end{table}
 
-%\begin{figure}[t]
-%\centering
-%\includegraphics[width=0.48\textwidth]{example-image-a}
-%\caption{Figure Caption}\label{fig1}
-%\end{figure}
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.48\textwidth]{example-image-a}
+\caption{%
+ Sampling schedules produced from 1000 repeated ANS simulations of
+ the same noisy signal. The gap in sampled grid points in the middle
+ of the grid is a consequence of the grid size heuristic, which uses
+ power-of-two grid sizes.
+}
+\label{fig:sched}
+\end{figure}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=1.0\textwidth,height=200.0pt]{example-image-a}
+\caption{%
+ Mean and standard deviations ($\mu\pm 3\sigma$) of point spread
+ functions for sampling schedules produced from 1000 repeated ANS
+ simulations of the same noisy signal at (a) $\sigma=0.01$ and
+ (b) $\sigma=0.5$ arb.~units.
+}
+\label{fig:psf}
+\end{figure*}
+
+Repeated simulations of ANS using the same ground truth signal with
+different samples of noise $\epsilon$ show that resulting schedules
+can vary substantially for subtly different measurements
+(Figure \ref{fig:sched}). In other words, while VRLS is a
+deterministic and globally convergent algorithm, the variances it
+produces remain sensitive to measurement noise. This corroborates the
+observation in \cite{schuyler:jbnmr2011} that reconstructions from
+beat-matched sampling was less robust than envelope-matched sampling,
+despite using more \emph{a priori} information. Even still, overall
+trends may be observed in the PSFs of schedules produced by repeated
+runs of ANS. Figure \ref{fig:psf} shows that ANS systematically
+minimizes the PSF of its schedules in a data-dependent manner, an
+effect also observed with a different variational method in
+\cite{worley:cmr2018}. The size of this effect depends on measurement
+noise, with average PSFs from ANS simulations of noisier signals
+exhibiting less pronounced, broader minima.
 
 % ============================================================================
 \section{Conclusions}
