@@ -237,11 +237,12 @@ useless in the task of identifying maximally informative grid points.
 \label{subsec:vrls}
 The VRLS algorithm is obtained by directly applying alternating minimization
 to $F(\m{\eta})$. The simplest of these updates is that of the weights
-$\m{\nu}$, which is obtained by setting $\partial\nu_i = 0$ and solving,
+$\m{\nu}$, which is obtained by setting each
+$\partial_{\nu_i} F(\m{\eta}) = 0$ and solving for $\nu_i$,
 \begin{equation}
 \nu_i \gets \sqrt{\xi (|\mu_i|^2 + \Gamma_{ii})^{-1}}
 \end{equation}
-which mirrors the $\ell_1$-IRLS update of $w_i \gets |x_i|^{-1}$ with
+This mirrors the $\ell_1$-IRLS update of $w_i \gets |x_i|^{-1}$ with
 several interesting advantages. In IRLS, a small correction term $c$ is
 often added to the update to obtain $w_i \gets (x_i^2 + c)^{-1/2}$ in order
 to avoid singularities as $x_i \to 0$ \cite{daubechies:cpam2010}. VRLS
@@ -474,8 +475,8 @@ FMF-VRLS to converge to an equivalent or better mean estimate.
 \centering
 \includegraphics[width=0.48\textwidth]{example-image-a}
 \caption{%
- Reconstruction errors produced from ANS simulations of signals
- with randomly generated parameters.
+ Reconstruction errors produced from static NUS and ANS simulations
+ of signals with randomly generated parameters.
 }
 \label{fig:ans}
 \end{figure}
@@ -487,8 +488,8 @@ Please fix me.
 % begin notes to delete
 \begin{itemize}
 \item Look at MSE of spectral estimates
-\item Manually exponentially bias the variance?
-\item Post-hoc variance computation fails in ANS
+\item Look at masked MSE around peaks only
+\item Compare to uniform, exponential, Poisson-gap
 \end{itemize}
 % end notes to delete
 
@@ -533,7 +534,7 @@ can vary substantially for subtly different measurements
 deterministic and globally convergent algorithm, the variances it
 produces remain sensitive to measurement noise. This corroborates the
 observation in \cite{schuyler:jbnmr2011} that reconstructions from
-beat-matched sampling was less robust than envelope-matched sampling,
+beat-matched sampling were less robust than envelope-matched sampling,
 despite using more \emph{a priori} information. Even still, overall
 trends may be observed in the PSFs of schedules produced by repeated
 runs of ANS. Figure \ref{fig:psf} shows that ANS systematically
@@ -571,10 +572,18 @@ require careful indexing and multi-complex FFTs, as nothing in VRLS
 precludes its generalization to higher dimensionalities.
 
 To the author's knowledge, VRLS is the first algorithm to satisfy the
-desiderata of ANS and consequently enable model-based active learning
-on NMR spectrometers. However, it remains limited in many important
-aspects. Principal among these limitations its its continued use of a
-fixed-basis signal model \eqref{eq:signalmodel}, which discards
+desiderata of ANS and consequently enable time-efficient model-based
+active learning on NMR spectrometers.\footnote{%
+ Aside from the variational Bayesian approach to ANS presented in
+ \cite{worley:cmr2018}, other authors have attempted ANS using the
+ sample variance of diffusion models \cite{goffinet:arxiv2025}.
+ However, their model required minutes to propose new grid points
+ and suffers from all the shortcomings of deep learning (black box
+ inscrutability, unclear out-of-domain generalization, inference-time
+ non-determinism, etc.).
+} However, it remains limited in
+many important aspects. Principal among these limitations its its continued
+use of a fixed-basis signal model \eqref{eq:signalmodel}, which discards
 nearly all available prior information about the ground truth signal in
 exchange for the use of a fast Fourier transform and a downstream cascade
 of signal processing, peak picking, and so on. Prior knowledge of
