@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.18.0"
+__generated_with = "0.18.1"
 app = marimo.App(width="medium")
 
 
@@ -13,6 +13,7 @@ def _():
 @app.cell
 def _():
     import itertools
+    from pathlib import Path
     import time
 
     import matplotlib.pyplot as plt
@@ -23,7 +24,7 @@ def _():
 
     from vrlsnmr.algorithms import vrls, vrls_mf
     from vrlsnmr.simulators import Signal
-    return F, Signal, itertools, pd, plt, sns, time, torch, vrls, vrls_mf
+    return F, Path, Signal, itertools, pd, plt, sns, time, torch, vrls, vrls_mf
 
 
 @app.cell
@@ -144,12 +145,33 @@ def _(
 
 
 @app.cell
-def _(df, sns):
-    ax = sns.lineplot(x="bs", y="time", hue="Algorithm", style="m", data=df)
-    ax.grid(alpha=0.2)
+def _(Path, df, plt, sns):
+    (fig, ax) = plt.subplots(figsize=(6, 4))
+
+    sns.lineplot(
+        x="bs",
+        y="time",
+        hue="Algorithm",
+        style="m",
+        data=df,
+        ax=ax,
+        palette=[(0, 0, 0), (0.8, 0.0, 0.0)]
+    )
+
     ax.set_xlabel("Number of parallel reconstructions")
-    ax.set_ylabel("Reconstruction time")
+    ax.set_ylabel("Reconstruction time / s")
+    ax.set_xlim((0, 1024))
     ax.set_yscale("log")
+    ax.grid(color=(0.9,) * 3)
+
+    plt.savefig(
+        Path.cwd() / "figure-2.pdf",
+        format="pdf",
+        dpi=600,
+        pad_inches=0,
+        bbox_inches="tight",
+    )
+
     ax
     return
 

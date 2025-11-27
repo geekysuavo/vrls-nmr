@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.18.0"
+__generated_with = "0.18.1"
 app = marimo.App(width="medium")
 
 
@@ -105,48 +105,65 @@ def _(algo, imag, real, sched, torch):
 
 
 @app.cell
-def _(f1_ppm, f2_ppm, gamma, mu, plt):
+def _(Path, f1_ppm, f2_ppm, gamma, mu, plt):
     i = 830
-    f1_i = f1_ppm[830].item()
+    f1_i = f1_ppm[i].item()
 
     mu_i = mu[i].real.cpu()
     gamma_i = gamma[i].sqrt().cpu()
 
-    (_, _ax) = plt.subplots()
-    _ax.plot(f2_ppm, mu_i)
-    _ax.plot(f2_ppm, gamma_i)
-    _ax.set_xlim((108, 135))
-    _ax.set_xlabel(f"$^{15}$N / ppm ($f_1 = {f1_i:.2f}$ ppm)")
-    _ax.set_ylabel("Amplitude / a.u.")
-    _ax.grid(alpha=0.2)
-
-    _axin = _ax.inset_axes((0.55, 0.5, 0.4, 0.4))
-    _axin.plot(f2_ppm, mu_i)
-    _axin.plot(f2_ppm, gamma_i)
-    _axin.set_xlim((100, 135))
-    _axin.set_ylim((-0.05, 0.1))
-    _axin.grid(alpha=0.2)
-
-    _ax
-    return
-
-
-@app.cell
-def _(f1_ppm, f2_ppm, mu, plt):
     recon = mu.real.t().cpu()
 
     _x = f1_ppm[580:980]
     _y = f2_ppm.clone()
     _z = recon[:, 580:980]
 
-    (_, _ax) = plt.subplots()
-    _ax.contour(_x, _y, _z, levels=[0.05, 0.1, 0.2, 0.5, 1])
-    _ax.invert_xaxis()
-    _ax.invert_yaxis()
-    _ax.set_xlabel("$^1$H / ppm")
-    _ax.set_ylabel("$^{15}$N / ppm")
-    _ax.grid(alpha=0.2)
-    _ax
+    (fig, (left, right)) = plt.subplots(nrows=1, ncols=2, figsize=(12, 4))
+
+    left.contour(
+        _x, _y, _z,
+        levels=[0.05, 0.1, 0.2, 0.5, 1],
+        cmap="binary",
+    )
+    left.invert_xaxis()
+    left.invert_yaxis()
+    left.set_xlabel("$^1$H / ppm")
+    left.set_ylabel("$^{15}$N / ppm")
+    left.grid(color=(0.9,) * 3)
+    left.text(
+        10.8, 104, "(a)",
+        fontweight="bold",
+        horizontalalignment="center",
+    )
+
+    right.plot(f2_ppm, mu_i, color=(0.4,) * 3)
+    right.plot(f2_ppm, gamma_i, color=(0.6,) * 3, linewidth=1)
+    right.set_xlim((108, 135))
+    right.set_xlabel(f"$^{{15}}$N / ppm ($f_1 = {f1_i:.2f}$ ppm)")
+    right.set_ylabel("Amplitude / a.u.")
+    right.grid(color=(0.9,) * 3)
+    right.text(
+        110, 3, "(b)",
+        fontweight="bold",
+        horizontalalignment="center",
+    )
+
+    inset = right.inset_axes((0.55, 0.5, 0.4, 0.4))
+    inset.plot(f2_ppm, mu_i, color=(0.4,) * 3)
+    inset.plot(f2_ppm, gamma_i, color=(0.6,) * 3, linewidth=1)
+    inset.set_xlim((100, 135))
+    inset.set_ylim((-0.05, 0.1))
+    inset.grid(color=(0.9,) * 3)
+
+    plt.savefig(
+        Path.cwd() / "figure-1.pdf",
+        format="pdf",
+        dpi=600,
+        pad_inches=0,
+        bbox_inches="tight",
+    )
+
+    fig
     return
 
 
