@@ -304,11 +304,12 @@ of $\mathcal{O}(n \log n + m^2 n + m^3)$ operations.
 
 \begin{figure*}[t]
 \centering
-\includegraphics[width=1.0\textwidth,height=200.0pt]{example-image-a}
+\includegraphics[width=1.0\textwidth]{figure-1.pdf}
 \caption{%
- (a) An $^1$H--$^{15}$N HSQC spectrum reconstructed from 4\%-sparse
+ (a) $^1$H--$^{15}$N HSQC spectrum reconstructed from 4\%-sparse
  measurements using VRLS. (b) One-dimensional slice taken from the
- reconstruction in (a) with its accompanying variance estimate.
+ reconstruction in (a) overlaid with the square root of its
+ accompanying variance estimate.
 }
 \label{fig:hsqc}
 \end{figure*}
@@ -380,18 +381,6 @@ the signal, i.e.~the fraction of nonzero elements of $\m{x}$.
 \section{Materials and methods}
 \label{sec:methods}
 
-\begin{figure}[t]
-\centering
-\includegraphics[width=0.48\textwidth]{example-image-a}
-\caption{%
- Runtimes of VRLS ($n_{\mathrm{iter}}=100$) and
- FMF-VRLS ($n_{\mathrm{iter}}=1000$) as a function of measurement
- count $m$, grid point count $n$, and number of parallel reconstructions
- $p$. Times are reported on a logarithmic scale.
-}
-\label{fig:time}
-\end{figure}
-
 \subsection{Datasets}
 \label{subsec:datasets}
 To evaluate the performance of VRLS on realistic NUS data, a
@@ -434,6 +423,18 @@ spectral reconstruction mean-squared errors (MSE) of the form
 L(\m{\mu}; \m{x}) = n_{\max}^{-1} \| \m{x} - \m{\mu} \|_2^2
 \end{equation}
 were computed for each ANS experiment.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.48\textwidth]{figure-2.pdf}
+\caption{%
+ On-GPU runtimes of VRLS ($n_{\mathrm{iter}}=100$, black) and
+ FMF-VRLS ($n_{\mathrm{iter}}=1000$, red) as a function of measurement
+ count $m$, grid point count $n$, and number of parallel reconstructions
+ $p$. Times are reported on a logarithmic scale.
+}
+\label{fig:time}
+\end{figure}
 
 \subsection{Software implementation}
 \label{subsec:impl}
@@ -520,19 +521,19 @@ Please fix me.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=0.48\textwidth]{example-image-a}
+\includegraphics[width=0.48\textwidth]{figure-4.pdf}
 \caption{%
- Sampling schedules produced from 1000 repeated ANS simulations of
- the same noisy signal. The gap in sampled grid points in the middle
- of the grid is a consequence of the grid size heuristic, which uses
- power-of-two grid sizes.
+ Distribution of sampling schedules produced from 1000 repeated ANS
+ simulations of the same noisy signal ($\sigma=0.01$). The gap in
+ sampled grid points in the middle of the grid is a consequence of
+ the grid size heuristic, which uses power-of-two grid sizes.
 }
 \label{fig:sched}
 \end{figure}
 
 \begin{figure*}[t]
 \centering
-\includegraphics[width=1.0\textwidth,height=200.0pt]{example-image-a}
+\includegraphics[width=1.0\textwidth,height=200.0pt]{figure-5.pdf}
 \caption{%
  Mean and standard deviations ($\mu\pm 3\sigma$) of point spread
  functions for sampling schedules produced from 1000 repeated ANS
