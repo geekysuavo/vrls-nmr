@@ -422,7 +422,10 @@ spectral reconstruction mean-squared errors (MSE) of the form
 \begin{equation}
 L(\m{\mu}; \m{x}) = n_{\max}^{-1} \| \m{x} - \m{\mu} \|_2^2
 \end{equation}
-were computed for each ANS experiment.
+were computed for each ANS experiment. For each simulated ANS experiment,
+a static NUS experiment was simulated using the same signal parameters
+and acquisition budget. For simplicity, all static NUS schedules were
+drawn from a uniform distribution over grid points.
 
 \begin{figure}[t]
 \centering
@@ -459,6 +462,19 @@ for ANS, and full ANS experiments were simulated in order to analyze the
 resulting schedules and determine the conditions in which successful ANS
 acquisition is feasible.
 
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.48\textwidth]{figure-3.pdf}
+\caption{%
+ Relative mean-squared error reductions
+ $(L_{\mathrm{NUS}}-L_{\mathrm{ANS}})/L_{\mathrm{NUS}}$ in the
+ noise-only regions of spectral reconstructions produced from
+ static NUS and ANS simulations of signals with randomly
+ generated parameters.
+}
+\label{fig:errors}
+\end{figure}
+
 % ============================================================================
 \section{Results}
 \label{sec:results}
@@ -487,61 +503,49 @@ VRLS to converge. Figure \ref{fig:time} summarizes this effect: for
 sufficiently small $m$ (high undersampling), VRLS requires less time than
 FMF-VRLS to converge to an equivalent or better mean estimate.
 
-\begin{figure}[h]
+\begin{figure}[t]
 \centering
-\includegraphics[width=0.48\textwidth]{example-image-a}
+\includegraphics[width=0.48\textwidth]{figure-4.pdf}
 \caption{%
- Reconstruction errors produced from static NUS and ANS simulations
- of signals with randomly generated parameters.
+ Representative reconstructions produced from static NUS and ANS
+ simulations of signals with randomly generated parameters. From
+ front to back, traces are the noisy ground truth signal, the ANS
+ reconstruction, and a static NUS reconstruction with the same
+ acquisition budget (12\% undersampling).
 }
 \label{fig:ans}
 \end{figure}
 
 \subsection{Active nonuniform sampling simulations}
 \label{subsec:ansresults}
-Please fix me.
+Comparing the reconstruction mean-squared errors $L(\m{\mu}; \m{x})$
+from ANS and static NUS surprisingly reveals equivalent performance.
+However, comparing their reconstruction errors in near-resonance and
+noise-only spectral regions shows diverging behaviors
+(Figures \ref{fig:errors}, \ref{fig:ans}). Near true resonances, ANS
+errors are the same or slightly increased relative to static NUS,
+suggesting a tendency of ANS to concentrate any artifacts it produces
+around real spectral content. In noise-only regions, ANS errors are
+dramatically reduced relative to static NUS, which tends to produce
+sharper artifacts more randomly within the spectral window. These trends
+are mirrored in the posterior variance estimates from ANS and static NUS,
+demonstrating that ANS preferentially selects grid points that inform
+VRLS about where the signal \emph{is not present} in the spectrum, as
+opposed to where it is. Viewed from the lens of solving the highly
+underdetermined linear system \eqref{eq:signalmodel}, such a
+``process of elimination'' is not an altogether unreasonable strategy.
 
-% begin notes to delete
-\begin{itemize}
-\item Look at MSE of spectral estimates
-\item Look at masked MSE around peaks only
-\item Compare to uniform, exponential, Poisson-gap
-\end{itemize}
-% end notes to delete
-
-%\begin{table}[t]
-%\centering
-%\begin{tabular}{l c r}
-%  1 & 2 & 3 \\
-%  4 & 5 & 6 \\
-%  7 & 8 & 9 \\
-%\end{tabular}
-%\caption{Table Caption}\label{fig1}
-%\end{table}
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=0.48\textwidth]{figure-4.pdf}
-\caption{%
- Distribution of sampling schedules produced from 1000 repeated ANS
- simulations of the same noisy signal ($\sigma=0.01$). The gap in
- sampled grid points in the middle of the grid is a consequence of
- the grid size heuristic, which uses power-of-two grid sizes.
-}
-\label{fig:sched}
-\end{figure}
-
-\begin{figure*}[t]
-\centering
-\includegraphics[width=1.0\textwidth]{figure-5.pdf}
-\caption{%
- Mean and standard deviations ($\mu\pm 3\sigma$) of point spread
- functions for sampling schedules produced from 1000 repeated ANS
- simulations of the same noisy signal at (a) $\sigma=0.01$ and
- (b) $\sigma=0.5$ arb.~units.
-}
-\label{fig:psf}
-\end{figure*}
+Perhaps less surprisingly, the degree to which ANS reduces the error
+of noise-only spectral regions, relative to static NUS, depends on
+the measurement noise $\sigma$ and the final undersampling rate $m/n$
+(Figure \ref{fig:errors}). When acquiring noisy data, the information
+gained for each new grid point is lower, reducing the advantage of ANS.
+Likewise, in less aggressively undersampled experiments, the variability
+of reconstructions due to the choice of schedule is diminished. By
+leveraging the uncertainty estimates and variational free energies
+computed by VRLS to form an early stopping criterion, we may therefore
+limit ANS to this ideal undersampling regime of $m \ll n$ while
+controlling reconstruction error.
 
 Repeated simulations of ANS using the same ground truth signal with
 different samples of noise $\epsilon$ show that resulting schedules
@@ -560,6 +564,30 @@ effect also observed with a different variational method in
 noise, with average PSFs from ANS simulations of noisier signals
 exhibiting less pronounced, broader minima.
 
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.48\textwidth]{figure-5.pdf}
+\caption{%
+ Distribution of sampling schedules produced from 1000 repeated ANS
+ simulations of the same noisy signal ($\sigma=0.01$). The gap in
+ sampled grid points in the middle of the grid is a consequence of
+ the grid size heuristic, which uses power-of-two grid sizes.
+}
+\label{fig:sched}
+\end{figure}
+
+\begin{figure*}[h]
+\centering
+\includegraphics[width=1.0\textwidth]{figure-6.pdf}
+\caption{%
+ Mean and standard deviations ($\mu\pm 3\sigma$) of point spread
+ functions for sampling schedules produced from 1000 repeated ANS
+ simulations of the same noisy signal at (a) $\sigma=0.01$ and
+ (b) $\sigma=0.5$ arb.~units.
+}
+\label{fig:psf}
+\end{figure*}
+
 % ============================================================================
 \section{Conclusions}
 \label{sec:concl}
@@ -575,13 +603,13 @@ measurement matrix $\m{A}$, VRLS efficiently estimates marginal variances
 that enable post-reconstruction quality checking and active sampling.
 VRLS is well-suited to GPU acceleration due to the embarrassingly parallel
 nature of marginal variance estimation; planned optimizations to the CUDA
-implementation are expected to further improve runtime as $m$ increases.
+implementation are expected to further improve runtime scaling with $m$.
 
 Certain characteristics of ANS still warrant further examination.
 For example, refinement of the grid size heuristic \eqref{eq:gridsize}
 could nudge the algorithm towards producing sampling schedules with more
 homogenous time-domain coverage, even though it remains to be seen whether
-this is more than an aesthetic flaw. Perhaps most obviously, further work
+this is more than an aesthetic trait. Perhaps most obviously, further work
 is needed to extend VRLS to multidimensional data where the advantages of
 NUS are greater. Doing so is largely an engineering exercise that will
 require careful indexing and multi-complex FFTs, as nothing in VRLS
@@ -593,10 +621,10 @@ active learning on NMR spectrometers.\footnote{%
  Aside from the variational Bayesian approach to ANS presented in
  \cite{worley:cmr2018}, other authors have attempted ANS using the
  sample variance of diffusion models \cite{goffinet:arxiv2025}.
- However, their model required minutes to propose new grid points
- and suffers from all the shortcomings of deep learning (black box
- inscrutability, unclear out-of-domain generalization, inference-time
- non-determinism, etc.).
+ However, the models in \cite{goffinet:arxiv2025} require minutes to
+ propose new grid points and suffer from all the shortcomings of deep
+ learning (black box inscrutability, unclear out-of-domain generalization,
+ inference-time non-determinism, etc.).
 } However, it remains limited in
 many important aspects. Principal among these limitations its its continued
 use of a fixed-basis signal model \eqref{eq:signalmodel}, which discards
