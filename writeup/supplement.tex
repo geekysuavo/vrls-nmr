@@ -43,6 +43,7 @@
 \emph{Active nonuniform sampling}}
 \author{Bradley Worley}
 \maketitle
+\tableofcontents
 
 % =============================================================================
 \section{Notation and definitions}
@@ -260,7 +261,7 @@ which is $\mathcal{IN}(\nu_\tau, \lambda_\tau)$ with parameters,
 
 % =============================================================================
 \clearpage
-\section{VRLS}
+\section{Extended VRLS}
 Define the optimization problem as follows:
 \begin{equation}
 \underset{\m{\eta}}{\text{minimize}} \; F(\m{\eta})
@@ -561,30 +562,30 @@ Finally, we substitute this equation back into $\m{\mu}$ to obtain
 Here we consider the fast mean-field alternative to VRLS where $\m{\gamma}$
 replaces $\m{\Gamma}$.
 
-We begin by bounding the error term in $F(\m{\eta})$,
+We begin by bounding the error term in $F(\m{\eta})$ around $\m{z}$,
 \begin{equation}
 \| \m{y} - \m{A} \m{\mu} \|_2^2 \le
  \| \m{y} - \m{A} \m{z} \|_2^2
  + 2 (\m{\mu} - \m{z})^\top \m{A}^\top (\m{A} \m{z} - \m{y})
  + \frac{L}{2} \| \m{\mu} - \m{z} \|_2^2
 \end{equation}
-
-After substituting this bound into $F(\m{\eta})$ to obtain a new
-function $\hat F(\m{\eta})$,
+This bound is tight when $\m{z} = \m{\mu}$. Substituting this bound
+into $F(\m{\eta})$ yields a new function $\hat F(\m{\eta})$,
 \begin{equation}
 \begin{aligned}
-\hat F(\m{\eta}) &=
+\hat F(\m{\mu}; \m{z}) &=
  \nu_\tau (\m{\mu} - \m{z})^\top \m{A}^\top (\m{A} \m{z} - \m{y})
  + \frac{L \nu_\tau}{4} \| \m{\mu} - \m{z} \|_2^2
 \\
- &+ \frac{1}{2} \sum_{i=1}^n \nu_{w,i} \lh( |\mu_i|^2 + \Gamma_{ii} \rh)
+ &+ \frac{1}{2} \sum_{i=1}^n \nu_{w,i} |\mu_i|^2
+ + \dots
 \end{aligned}
 \end{equation}
 
 Setting the $\m{\mu}$-gradient of $\hat F$ equal to zero yields,
 \begin{equation}
 \begin{aligned}
-\nabla_{\m{\mu}} \hat F(\m{\eta}) &=
+\nabla_{\m{\mu}} \hat F(\m{\mu}; \m{z}) &=
  \lh( \frac{\nu_\tau}{2} \m{I} + \m{V} \rh) \m{\mu}
  -\nu_\tau \lh( \frac{L}{2} \m{z} - \m{A}^\top (\m{A} \m{z} - \m{y}) \rh)
 \\ \implies
@@ -606,6 +607,61 @@ Setting the $\gamma_i$-gradient of $\hat F$ equal to zero yields,
 \end{aligned}
 \end{equation}
 which mirrors the SAVE update.
+
+
+% =============================================================================
+\clearpage
+\section{Simulated signal parameters}
+The following ground truth signal model used to benchmark ANS,
+\begin{equation}
+y(t) = \sum_{c=1}^{n_c} \alpha_c \exp\left\{
+  2 \pi (i \omega_c - \rho_c) t + i \theta_c
+ \right\} + \epsilon
+\end{equation}
+was parametrized by randomly sampling signal parameters from
+the following distributions:
+\begin{equation}
+\begin{aligned}
+\omega_c &\sim \mathcal{U}(-\tfrac{1}{2}, \tfrac{1}{2})
+\\
+\rho_c &\sim
+ \delta_\rho^{-1} \sum_{r=1}^{\delta_\rho} Z_r^2,
+ \quad\text{where } Z_r \sim \mathcal{N}(0, 1)
+\\
+\alpha_c &\sim
+ \delta_\alpha^{-1} \sum_{r=1}^{\delta_\alpha} Z_r^2,
+ \quad\text{where } Z_r \sim \mathcal{N}(0, 1)
+\\
+\theta_c &\sim \mathcal{N}(0, s_\theta^2)
+\\
+\epsilon &\sim \mathcal{N}(0, \sigma^2)
+\end{aligned}
+\end{equation}
+
+The following fixed parameters were used in all ANS simulations,
+\begin{table}[h]
+\centering
+\begin{tabular}{l l}
+ Parameter & Value \\ \hline
+ $\delta_\rho$ & 20 \\
+ $\bar\rho$ & 0.001 \\
+ $\bar\alpha$ & 1 \\
+ $s_\theta$ & $10^{-6}$ \\
+\end{tabular}
+\end{table}
+
+The following parameters were explored in a Cartesian product
+in ANS simulations,
+\begin{table}[h]
+\centering
+\begin{tabular}{l l}
+ Parameter & Values \\ \hline
+ $n_c$ & 4, 8, 12 \\
+ $\delta_\alpha$ & 1, 10, 50 \\
+ $\sigma$ & 0.01, 0.05, 0.1 \\
+ $\lfloor m/n \rfloor$ & 0.05, 0.1, 0.2 \\
+\end{tabular}
+\end{table}
 
 % =============================================================================
 \end{document}

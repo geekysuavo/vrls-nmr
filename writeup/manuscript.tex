@@ -221,7 +221,7 @@ Noting that the minimizing factors $q_x$ and $q_w$ are a multivariate
 normal distribution and a product of inverse normal distributions,
 respectively,
 \begin{align}
-q_x(\m{x}) &= \mathcal{N}(\m{\mu}, \m{\Gamma})
+q_x(\m{x}) &= \mathcal{N}_n(\m{\mu}, \m{\Gamma})
 \\
 q_w(w_i) &= \mathcal{IN}(\nu_i, \lambda_i)
 \end{align}
@@ -364,8 +364,9 @@ of ``cold start'' problem: naively beginning with a single measurement
 on a large grid places VRLS outside the desirable region of its
 sparsity-undersampling phase diagram \cite{donoho:pnas2009} where
 successful reconstructions are expected. To overcome this, ANS begins
-with an initial number of measurements $m_0 > 1$ uniformly sampled, and
-gradually increases the size of its grid $n$ using a CS-inspired heuristic,
+with an initial number of measurements $m_0 > 1$ uniformly sampled
+\cite{cullen:mrc2023}, and gradually increases the size of its grid
+$n$ using a CS-inspired heuristic,
 \begin{equation}
 \label{eq:gridsize}
 n_* = \sup\left\{
