@@ -15,6 +15,12 @@
 % ============================================================================
 \newcommand{\m}[1]{\boldsymbol{#1}}
 
+\ifpreprint
+\newcommand{\halfsize}{0.88\textwidth}
+\else
+\newcommand{\halfsize}{0.48\textwidth}
+\fi
+
 % ============================================================================
 \journal{Journal of Magnetic Resonance}
 
@@ -430,7 +436,7 @@ drawn from a uniform distribution over grid points.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=0.48\textwidth]{figure-2.pdf}
+\includegraphics[width=\halfsize]{figure-2.pdf}
 \caption{%
  On-GPU runtimes of VRLS ($n_{\mathrm{iter}}=100$, black) and
  FMF-VRLS ($n_{\mathrm{iter}}=1000$, red) as a function of measurement
@@ -465,7 +471,7 @@ acquisition is feasible.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=0.48\textwidth]{figure-3.pdf}
+\includegraphics[width=\halfsize]{figure-3.pdf}
 \caption{%
  Relative mean-squared error reductions
  $(L_{\mathrm{NUS}}-L_{\mathrm{ANS}})/L_{\mathrm{NUS}}$ in the
@@ -506,7 +512,7 @@ FMF-VRLS to converge to an equivalent or better mean estimate.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=0.48\textwidth]{figure-4.pdf}
+\includegraphics[width=\halfsize]{figure-4.pdf}
 \caption{%
  Representative reconstructions produced from static NUS and ANS
  simulations of signals with randomly generated parameters. From
@@ -567,7 +573,7 @@ exhibiting less pronounced, broader minima.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=0.48\textwidth]{figure-5.pdf}
+\includegraphics[width=\halfsize]{figure-5.pdf}
 \caption{%
  Distribution of sampling schedules produced from 1000 repeated ANS
  simulations of the same noisy signal ($\sigma=0.01$). The gap in
