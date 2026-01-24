@@ -5,6 +5,7 @@ from torch import Tensor
 
 import vrlsnmr.operators as op
 
+PointEstimatorReturnType = tuple[Tensor, Tensor]
 AlgorithmReturnType = tuple[Tensor, Tensor, Tensor, Tensor]
 AlgorithmFunc = Callable[[Tensor, Tensor, ...], AlgorithmReturnType]
 MeasurementFunc = Callable[[int], Tensor]
@@ -287,3 +288,62 @@ def vrls_mf(
         sigma = gamma.mean(dim=1, keepdim=True).expand_as(yhat)
 
     return (mu, gamma, yhat, sigma)
+
+
+@torch.inference_mode()
+def ists(
+    y: Tensor,
+    ids: Tensor,
+    mu: float,
+    n: int,
+    niter: int,
+) -> PointEstimatorReturnType:
+    """
+    Iterative Soft Thresholding (IST-S).
+
+    Args:
+        y: :math:`(m)` or :math:`(b, m)`, Measurements (complex).
+        ids: :math:`(m)`, Measurement indices.
+        mu: Thresholding factor.
+        n: Sparse dimension size.
+        niter: Number of iterations.
+
+    Returns:
+        A :class:`tuple` containing
+
+        - :math:`(b, n)`, Frequency-domain point estimate (complex).
+        - :math:`(b, n)`, Time-domain point estimate (complex).
+    """
+    device = y.device
+    complex_dtype = y.dtype
+
+    if y.ndim == 1:
+        y = y.unsqueeze(dim=0)
+
+    (bs, m) = y.shape
+
+    xhat = torch.zeros((bs, n), dtype=complex_dtype, device=device)
+    yhat = torch.zeros((bs, n), dtype=complex_dtype, device=device)
+    delta = torch.zeros((bs, n), dtype=complex_dtype, device=device)
+
+    mask = torch.zeros((n,), dtype=torch.bool, device=device)
+    mask[ids] = True
+
+    for it in range(niter):
+        delta[:, mask] = y - yhat
+        xhat += torch.fft.fft(delta, norm="ortho")
+
+        if it == 0:
+            thresh = xhat.abs().max(dim=1, keepdim=True)
+
+        xhat_abs = xhat.abs()
+        xhat = torch.where(
+            xhat_abs <= thresh,
+            0.0,
+            xhat * (1 - thresh / xhat_abs),
+        )
+
+        yhat = torch.fft.ifft(xhat, norm="ortho")
+        thresh *= mu
+
+    return (xhat, yhat)
