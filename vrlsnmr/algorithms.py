@@ -334,7 +334,7 @@ def ists(
         xhat += torch.fft.fft(delta, norm="ortho")
 
         if it == 0:
-            thresh = xhat.abs().max(dim=1, keepdim=True)
+            thresh = xhat.abs().max(dim=1, keepdim=True).values
 
         xhat_abs = xhat.abs()
         xhat = torch.where(

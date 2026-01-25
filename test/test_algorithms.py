@@ -15,7 +15,7 @@ def build_instance(
     m: int = 50,
     n: int = 100,
     stdev: float = 0.01,
-) -> tuple[Tensor, Tensor, int]:
+) -> tuple[Tensor, Tensor]:
     ids = torch.randperm(n).narrow(dim=0, start=0, length=m).sort(dim=0).values
     B = torch.eye(n).index_select(dim=0, index=ids)
 
@@ -38,16 +38,16 @@ def build_instance(
     y = y.squeeze(dim=2)
     assert y.shape == (bs, m)
 
-    return (y, ids, n)
+    return (y, ids)
 
 
 def test_vrls():
-    niter = 10
+    (k, n, niter) = (10, 100, 10)
     stdev = 0.01
     tau = 1 / stdev**2
     xi = tau
 
-    (y, ids, n) = build_instance(stdev=stdev)
+    (y, ids) = build_instance(k=k, n=n, stdev=stdev)
 
     out_cpu = vrls(y, ids, tau, xi, n, niter)
 
@@ -65,12 +65,12 @@ def test_vrls():
 
 
 def test_vrls_ex():
-    niter = 10
+    (k, n, niter) = (10, 100, 10)
     stdev = 0.01
     beta_tau = 1e6
     beta_xi = 1e6
 
-    (y, ids, n) = build_instance(stdev=stdev)
+    (y, ids) = build_instance(k=k, n=n, stdev=stdev)
 
     out_cpu = vrls_ex(y, ids, beta_tau, beta_xi, n, niter)
 
@@ -89,12 +89,12 @@ def test_vrls_ex():
 
 @pytest.mark.parametrize("full_var", (False, True))
 def test_vrls_mf(full_var):
-    niter = 100
+    (k, n, niter) = (10, 100, 100)
     stdev = 0.01
     tau = 1 / stdev**2
     xi = tau
 
-    (y, ids, n) = build_instance(stdev=stdev)
+    (y, ids) = build_instance(k=k, n=n, stdev=stdev)
 
     out_cpu = vrls_mf(y, ids, tau, xi, n, niter, full_var=full_var)
 
@@ -112,11 +112,12 @@ def test_vrls_mf(full_var):
 
 
 def test_ists():
+    (k, n) = (10, 100)
     stdev = 0.001
-    niter = 100
-    mu = 0.99
+    niter = 200
+    mu = 0.98
 
-    (y, ids, n) = build_instance(stdev=stdev)
+    (y, ids) = build_instance(k=k, n=n, stdev=stdev)
 
     out_cpu = ists(y, ids, mu, n, niter)
 
