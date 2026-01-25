@@ -330,7 +330,7 @@ def ists(
     mask[ids] = True
 
     for it in range(niter):
-        delta[:, mask] = y - yhat
+        delta[:, mask] = y - yhat[:, mask]
         xhat += torch.fft.fft(delta, norm="ortho")
 
         if it == 0:
