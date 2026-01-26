@@ -1,7 +1,10 @@
 # .gitignore
 .DS_Store
 environ
-notebooks/__marimo__
-notebooks/*.pickle
-writeup/elsarticle.cls
-writeup/elsarticle-num.bst
+__marimo__
+*.parquet
+*.pickle
+/build
+/dist
+/writeup/elsarticle.cls
+/writeup/elsarticle-num.bst

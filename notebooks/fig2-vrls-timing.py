@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.18.1"
+__generated_with = "0.19.6"
 app = marimo.App(width="medium")
 
 
@@ -164,8 +164,10 @@ def _(Path, df, plt, sns):
     ax.set_yscale("log")
     ax.grid(color=(0.9,) * 3)
 
+    figure_path = Path.cwd() / "figures" / "figure-2.pdf"
+    figure_path.parent.mkdir(exist_ok=True)
     plt.savefig(
-        Path.cwd() / "figure-2.pdf",
+        figure_path,
         format="pdf",
         dpi=600,
         pad_inches=0,

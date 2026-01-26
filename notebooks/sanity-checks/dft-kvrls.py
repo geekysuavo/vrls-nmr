@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.17.2"
+__generated_with = "0.19.6"
 app = marimo.App()
 
 
@@ -73,14 +73,12 @@ def _(Phi, instance, mu, plt):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ### Takeaways
 
     1. Easy peasy, lemon squeezy.
     2. Double-check this using an actual NUS NMR FID.
-    """
-    )
+    """)
     return
 
 

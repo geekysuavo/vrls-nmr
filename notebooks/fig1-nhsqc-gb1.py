@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.18.1"
+__generated_with = "0.19.6"
 app = marimo.App(width="medium")
 
 
@@ -155,8 +155,10 @@ def _(Path, f1_ppm, f2_ppm, gamma, mu, plt):
     inset.set_ylim((-0.05, 0.1))
     inset.grid(color=(0.9,) * 3)
 
+    figure_path = Path.cwd() / "figures" / "figure-1.pdf"
+    figure_path.parent.mkdir(exist_ok=True)
     plt.savefig(
-        Path.cwd() / "figure-1.pdf",
+        figure_path,
         format="pdf",
         dpi=600,
         pad_inches=0,

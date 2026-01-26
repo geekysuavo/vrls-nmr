@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.18.1"
+__generated_with = "0.19.6"
 app = marimo.App(width="medium")
 
 
@@ -16,30 +16,16 @@ def _():
     from itertools import product
     import operator
     from pathlib import Path
-    import time
 
-    import matplotlib.pyplot as plt
     import pandas as pd
-    import seaborn as sns
     import torch
+    from torch import Tensor
     import torch.nn.functional as F
 
     import vrlsnmr.algorithms as algo
+    import vrlsnmr.operators as op
     import vrlsnmr.simulators as sim
-    return (
-        Path,
-        algo,
-        operator,
-        partial,
-        pd,
-        plt,
-        product,
-        reduce,
-        sim,
-        sns,
-        time,
-        torch,
-    )
+    return Tensor, algo, op, operator, partial, pd, product, reduce, sim, torch
 
 
 @app.function
@@ -57,9 +43,9 @@ def _(operator, reduce):
     ncomp_values = (4, 8, 12)
     ampl_dof_values = (1, 10, 50,)
     sparsity_values = (  # sparsity-dependent num_replicas
-        (0.05,) * 10 +
-        (0.1,) * 5 +
-        (0.2,) * 2
+        (0.05,) * 100 +
+        (0.1,) * 25 +
+        (0.2,) * 5
     )
 
     space_names = (
@@ -81,31 +67,13 @@ def _(operator, reduce):
 
 
 @app.cell
-def _(
-    algo,
-    decay_rate,
-    mo,
-    n,
-    niter,
-    operator,
-    partial,
-    pd,
-    product,
-    reduce,
-    sim,
-    space,
-    space_names,
-    time,
-    torch,
-):
-    data = []
-
-    for point in mo.status.progress_bar(
-        product(*space),
-        total=reduce(operator.mul, map(len, space)),
+def _(partial, sim):
+    def build_signal(
+        sigma: float,
+        num_components: int,
+        amplitude_dof: int,
+        decay_rate: float,
     ):
-        (sigma, num_components, amplitude_dof, min_sparsity) = point
-
         ground_truth = sim.Signal.build(
             num_components=num_components,
             frequencies=partial(sim.random_spaced, lower=-0.5, upper=0.5, space=2 * decay_rate),
@@ -114,7 +82,99 @@ def _(
             phases=partial(sim.random_normal, mean=0.0, stdev=1.0e-6),
         )
         ground_truth.cuda()
+        measurement = partial(ground_truth, noise=sigma)
 
+        return (ground_truth, measurement)
+    return (build_signal,)
+
+
+@app.cell
+def _(Tensor, space_names, torch):
+    def append_entries(
+        point: tuple,
+        x0: Tensor,
+        xhat: Tensor,
+        mask: Tensor,
+        m_final: int,
+        n_final: int,
+        schedule: str,
+        algorithm: str,
+        append_to: list[dict],
+        var: Tensor | None = None,
+        m_initial: int | None = None,
+        n_initial: int | None = None,
+    ):
+        identifier = hash(point)
+        replicate = sum(
+            entry["identifier"] == identifier
+            for entry in append_to
+        )
+        entry_base = {
+            **dict(zip(space_names, point)),
+            **dict(
+                replicate=replicate,
+                identifier=identifier,
+                m_initial=m_initial or m_final,
+                n_initial=n_initial or n_final,
+                m_final=m_final,
+                n_final=n_final,
+                schedule=schedule,
+                algorithm=algorithm,
+            ),
+        }
+
+        signal_mse = (xhat - x0)[mask].abs().square().mean().item()
+        noise_mse = (xhat - x0)[~mask].abs().square().mean().item()
+        total_mse = (xhat - x0).abs().square().mean().item()
+
+        if var is None:
+            signal_var = torch.nan
+            noise_var = torch.nan
+            total_var = torch.nan
+        else:
+            signal_var = var[mask].mean().item()
+            noise_var = var[~mask].mean().item()
+            total_var = var.mean().item()
+
+        entry = dict(region="signal", error=signal_mse, variance=signal_var)
+        append_to.append({**entry_base, **entry})
+
+        entry = dict(region="noise", error=noise_mse, variance=noise_var)
+        append_to.append({**entry_base, **entry})
+
+        entry = dict(region="total", error=total_mse, variance=total_var)
+        append_to.append({**entry_base, **entry})
+    return (append_entries,)
+
+
+@app.cell
+def _(
+    algo,
+    append_entries,
+    build_signal,
+    decay_rate,
+    mo,
+    n,
+    niter,
+    op,
+    operator,
+    partial,
+    product,
+    reduce,
+    space,
+    torch,
+):
+    data = []
+
+    for point in mo.status.progress_bar(
+        product(*space),
+        total=reduce(operator.mul, map(len, space)),
+    ):
+        # === Ground truth ===
+        (sigma, num_components, amplitude_dof, min_sparsity) = point
+        (ground_truth, measurement) = build_signal(sigma, num_components, amplitude_dof, decay_rate)
+
+        # === Shared params ===
         tau = 1 / sigma**2
 
         n_final = n
@@ -123,10 +183,10 @@ def _(
         m_initial = next_power_of_two(int(m_final // 8))
         n_initial = m_initial * 4
 
-        t0 = time.perf_counter()
+        # === ANS + VRLS ===
         (y, ids, mu, gamma_diag, _, _) = algo.ans(
             model=algo.vrls,
-            measure=partial(ground_truth, noise=sigma),
+            measure=measurement,
             m_initial=m_initial,
             m_final=m_final,
             n_initial=n_initial,
@@ -136,11 +196,10 @@ def _(
             xi=tau,
             niter=niter,
         )
-        dt = time.perf_counter() - t0
 
         mu.squeeze_(dim=0)
         gamma_diag.squeeze_(dim=0)
-    
+
         n_fd = mu.size(dim=0)
         t = torch.arange(n_fd, device=mu.device)
         y0 = ground_truth(t).select(dim=0, index=0)
@@ -148,33 +207,58 @@ def _(
         x0.real -= x0.real.median()
         mask = x0.real.gt(sigma)
 
-        signal_mse = (mu - x0)[mask].abs().square().mean().item()
-        noise_mse = (mu - x0)[~mask].abs().square().mean().item()
-        total_mse = (mu - x0).abs().square().mean().item()
-
-        signal_var = gamma_diag[mask].mean().item()
-        noise_var = gamma_diag[~mask].mean().item()
-        total_var = gamma_diag.mean().item()
-
-        entry = dict(zip(space_names, point))
-        entry["m_initial"] = m_initial
-        entry["m_final"] = m_final
-        entry["n_initial"] = n_initial
-        entry["n_final"] = n_final
-        entry["mse_signal_ans"] = signal_mse
-        entry["mse_noise_ans"] = noise_mse
-        entry["mse_total_ans"] = total_mse
-        entry["var_signal_ans"] = signal_var
-        entry["var_noise_ans"] = noise_var
-        entry["var_total_ans"] = total_var
-        entry["time_ans"] = dt / niter
-
-        ids_unif = (
-            torch.randperm(n_fd // 2, device=ids.device)
-            .narrow(dim=0, start=0, length=m_final)
+        append = partial(
+            append_entries,
+            append_to=data,
+            point=point,
+            x0=x0,
+            mask=mask,
+            m_initial=m_initial,
+            n_initial=n_initial,
+            m_final=m_final,
+            n_final=n_final,
         )
-        y_unif = ground_truth(ids_unif, noise=sigma)
-        t0 = time.perf_counter()
+
+        append(xhat=mu, var=gamma_diag, schedule="ans", algorithm="vrls")
+
+        # === Static schedules and measurements ===
+        ids_unif = op.schedunif(
+            m=m_final,
+            n=n_fd // 2,
+            device=ids.device,
+        )
+
+        ids_exp = op.schedexp(
+            rate=decay_rate,
+            m=m_final,
+            n=n_fd // 2,
+            device=ids.device,
+        )
+
+        ids_pg = op.schedpg(
+            m=m_final,
+            n=n_fd // 2,
+            device=ids.device,
+        )
+
+        y_unif = measurement(ids_unif)
+        y_exp = measurement(ids_exp)
+        y_pg = measurement(ids_pg)
+
+        # === ANS + IST ===
+        (xhat, _) = algo.ists(
+            y,
+            ids,
+            mu=0.98,
+            n=n_fd,
+            niter=niter * 10,
+        )
+
+        xhat = xhat.squeeze(dim=0).roll(n_fd // 2)
+
+        append(xhat=xhat, schedule="ans", algorithm="ists")
+
+        # === Uniform + VRLS ===
         (mu_unif, gamma_unif, _, _) = algo.vrls(
             y_unif,
             ids_unif,
@@ -183,101 +267,93 @@ def _(
             n=n_fd,
             niter=niter,
         )
-        dt = time.perf_counter() - t0
-    
+
         mu_unif = mu_unif.squeeze(dim=0).roll(n_fd // 2)
         gamma_unif = gamma_unif.squeeze(dim=0).roll(n_fd // 2)
-    
-        signal_mse = (mu_unif - x0)[mask].abs().square().mean().item()
-        noise_mse = (mu_unif - x0)[~mask].abs().square().mean().item()
-        total_mse = (mu_unif - x0).abs().square().mean().item()
 
-        signal_var = gamma_unif[mask].mean().item()
-        noise_var = gamma_unif[~mask].mean().item()
-        total_var = gamma_unif.mean().item()
+        append(xhat=mu_unif, var=gamma_unif, schedule="unif", algorithm="vrls")
 
-        entry["mse_signal_unif"] = signal_mse
-        entry["mse_noise_unif"] = noise_mse
-        entry["mse_total_unif"] = total_mse
-        entry["var_signal_unif"] = signal_var
-        entry["var_noise_unif"] = noise_var
-        entry["var_total_unif"] = total_var
-        entry["time_unif"] = dt
-        data.append(entry)
+        # === Uniform + IST ===
+        (xhat_unif, _) = algo.ists(
+            y_unif,
+            ids_unif,
+            mu=0.98,
+            n=n_fd,
+            niter=niter * 10,
+        )
 
+        xhat_unif = xhat_unif.squeeze(dim=0).roll(n_fd // 2)
+
+        append(xhat=xhat_unif, schedule="unif", algorithm="ists")
+
+        # === Exponential + VRLS ===
+        (mu_exp, gamma_exp, _, _) = algo.vrls(
+            y_exp,
+            ids_exp,
+            tau=tau,
+            xi=tau,
+            n=n_fd,
+            niter=niter,
+        )
+
+        mu_exp = mu_exp.squeeze(dim=0).roll(n_fd // 2)
+        gamma_exp = gamma_exp.squeeze(dim=0).roll(n_fd // 2)
+
+        append(xhat=mu_exp, var=gamma_exp, schedule="exp", algorithm="vrls")
+
+        # === Exponential + IST ===
+        (xhat_exp, _) = algo.ists(
+            y_exp,
+            ids_exp,
+            mu=0.98,
+            n=n_fd,
+            niter=niter * 10,
+        )
+
+        xhat_exp = xhat_exp.squeeze(dim=0).roll(n_fd // 2)
+
+        append(xhat=xhat_exp, schedule="exp", algorithm="ists")
+
+        # === Poisson-gap + VRLS ===
+        (mu_pg, gamma_pg, _, _) = algo.vrls(
+            y_pg,
+            ids_pg,
+            tau=tau,
+            xi=tau,
+            n=n_fd,
+            niter=niter,
+        )
+
+        mu_pg = mu_pg.squeeze(dim=0).roll(n_fd // 2)
+        gamma_pg = gamma_pg.squeeze(dim=0).roll(n_fd // 2)
+
+        append(xhat=mu_pg, var=gamma_pg, schedule="pg", algorithm="vrls")
+
+        # === Poisson-gap + IST ===
+        (xhat_pg, _) = algo.ists(
+            y_pg,
+            ids_pg,
+            mu=0.98,
+            n=n_fd,
+            niter=niter * 10,
+        )
+
+        xhat_pg = xhat_pg.squeeze(dim=0).roll(n_fd // 2)
+
+        append(xhat=xhat_pg, schedule="pg", algorithm="ists")
+    return (data,)
+
+
+@app.cell
+def _(data, pd):
     df = pd.DataFrame(data)
     df
-    return df, mask, mu, mu_unif, x0
+    return (df,)
 
 
 @app.cell
 def _(df):
-    df["var_noise_diff"] = (df.var_noise_unif - df.var_noise_ans) / df.var_noise_unif
-    df["mse_noise_diff"] = (df.mse_noise_unif - df.mse_noise_ans) / df.mse_noise_unif
-    return
-
-
-@app.cell
-def _(df):
-    agg = df.groupby(["sigma", "min_sparsity"])[["mse_noise_ans", "mse_noise_unif", "mse_noise_diff"]].mean()
-    agg
-    return
-
-
-@app.cell
-def _(Path, df, plt, sns):
-    (fig, ax) = plt.subplots(figsize=(6, 4))
-
-    sns.barplot(
-        x="sigma",
-        y="mse_noise_diff",
-        hue="min_sparsity",
-        data=df,
-        ax=ax,
-        palette=[
-            (0.8,) * 3,
-            (0.6,) * 3,
-            (0.4,) * 3,
-        ]
-    )
-
-    ax.set_xlabel(r"Measurement noise ($\sigma$)")
-    ax.set_ylabel("Relative error reduction")
-    ax.grid(color=(0.9,) * 3)
-    ax.set_axisbelow(True)
-
-    legend = ax.get_legend()
-    legend.set_title("Undersampling")
-    legend.texts[0].set_text("5%")
-    legend.texts[1].set_text("10%")
-    legend.texts[2].set_text("20%")
-
-    plt.savefig(
-        Path.cwd() / "figure-3.pdf",
-        format="pdf",
-        dpi=600,
-        pad_inches=0,
-        bbox_inches="tight",
-    )
-
-    fig
-    return
-
-
-@app.cell
-def _(mask, mu, mu_unif, plt, x0):
-    (_, _ax) = plt.subplots()
-
-    _ax.plot(x0.real.cpu())
-    _ax.plot(mu.real.cpu())
-    _ax.plot(mu_unif.real.cpu())
-    _ax.plot(mask.cpu())
-    _ax.grid(alpha=0.2)
-
-    _ax.set_xlim((900, 1024))
-    #_ax.set_ylim((-1, 1))
-
-    _ax
+    df.to_parquet("ans-benchmark.parquet")
     return
 
 

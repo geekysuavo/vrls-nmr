@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.17.2"
+__generated_with = "0.19.6"
 app = marimo.App()
 
 
@@ -88,16 +88,14 @@ def _(beta_xi, inverse_normal, nu_xi, plt, torch):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ### Takeaways
 
     1. Setting $\beta_\tau = \beta_\xi \gg 1/\sigma^2$ seems to work well. The converged $q(\tau)$ and $q(\xi)$ are
        what you'd expect to set based on knowledge of $\sigma$ and the fixed-$\xi$ experiments.
     2. For experimenting with the "algebraic" changes, the non-extended VRLS can be used.
     3. We can probably relate $\tau / \xi$ to expected SNR.
-    """
-    )
+    """)
     return
 
 

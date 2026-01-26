@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.17.2"
+__generated_with = "0.19.6"
 app = marimo.App()
 
 
@@ -31,32 +31,26 @@ def _(instance):
     (k, m, n, stdev) = (instance.k, instance.m, instance.n, instance.stdev)
     (A, x0, noise, y) = (instance.A, instance.x0, instance.noise, instance.y)
     Phi = instance.Phi
-    return A, Phi, n, x0, y
+    return A, Phi, n, stdev, x0, y
 
 
 @app.cell
-def _():
-    beta_tau = 1e6
-    beta_xi = 1e6
-    return beta_tau, beta_xi
+def _(stdev):
+    tau = 1 / stdev**2  # noise is known
+    xi = 1e4
+    return tau, xi
 
 
 @app.cell
-def _(A, beta_tau, beta_xi, n, plt, torch, x0, y):
-    nu_tau = 1
-    nu_xi = 1
-
+def _(A, n, plt, tau, torch, x0, xi, y):
     mu = torch.zeros(n).cfloat()
     Gamma = torch.eye(n).cfloat()
 
     for _ in range(100):
         m2 = mu.abs().square() + Gamma.diag().real
-        nu_w = (nu_xi / (m2 + 1e-09)).sqrt()
-        nu_xi = (beta_xi / nu_w.reciprocal().sum()).sqrt()
-        ess = (y - A @ mu).abs().square().sum() + (A.t() @ A @ Gamma).diag().sum().real
-        nu_tau = (beta_tau / ess).sqrt()
-        Gamma = torch.linalg.inv(nu_w.diag() + nu_tau * A.t().conj() @ A)
-        mu = nu_tau * Gamma @ A.t().conj() @ y
+        w = (xi / (m2 + 1e-09)).sqrt()
+        Gamma = torch.linalg.inv(w.diag() + tau * A.t().conj() @ A)
+        mu = tau * Gamma @ A.t().conj() @ y
 
     plt.plot(mu.real)
     plt.plot(x0.real)
@@ -75,13 +69,11 @@ def _(Phi, instance, mu, plt):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ### Takeaways
 
     1. Simpler than expected; just make sure weights are real and `.t()` is replaced with `.t().conj()`
-    """
-    )
+    """)
     return
 
 
