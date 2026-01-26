@@ -39,6 +39,8 @@ def _(operator, reduce):
     niter = 100
     decay_rate = 0.001
 
+    ist_mu = 0.98
+
     sigma_values = (0.01, 0.05, 0.1)
     ncomp_values = (4, 8, 12)
     ampl_dof_values = (1, 10, 50,)
@@ -63,7 +65,7 @@ def _(operator, reduce):
     )
 
     space_size = reduce(operator.mul, map(len, space))
-    return decay_rate, n, niter, space, space_names
+    return decay_rate, ist_mu, n, niter, space, space_names
 
 
 @app.cell
@@ -153,6 +155,7 @@ def _(
     append_entries,
     build_signal,
     decay_rate,
+    ist_mu,
     mo,
     n,
     niter,
@@ -245,102 +248,40 @@ def _(
         y_exp = measurement(ids_exp)
         y_pg = measurement(ids_pg)
 
-        # === ANS + IST ===
-        (xhat, _) = algo.ists(
-            y,
-            ids,
-            mu=0.98,
-            n=n_fd,
-            niter=niter * 10,
+        # === Algorithms ===
+        def vrls(y_, ids_):
+            (xhat, xvar, _, _) = algo.vrls(y_, ids_, tau=tau, xi=tau, n=n_fd, niter=niter)
+            xhat = xhat.squeeze(dim=0).roll(n_fd // 2)
+            xvar = xvar.squeeze(dim=0).roll(n_fd // 2)
+            return (xhat, xvar)
+
+        def fmf(y_, ids_):
+            (xhat, xvar, _, _) = algo.vrls_mf(y_, ids_, tau=tau, xi=tau, n=n_fd, niter=niter * 10)
+            xhat = xhat.squeeze(dim=0).roll(n_fd // 2)
+            xvar = xvar.squeeze(dim=0).roll(n_fd // 2)
+            return (xhat, xvar)
+
+        def ists(y_, ids_):
+            (xhat, _) = algo.ists(y_, ids_, mu=ist_mu, n=n_fd, niter=niter * 10)
+            xhat = xhat.squeeze(dim=0).roll(n_fd // 2)
+            return (xhat, None)
+
+        funcs = dict(vrls=vrls, fmf=fmf, ists=ists)
+        data = dict(
+            ans=(y, ids),
+            unif=(y_unif, ids_unif),
+            exp=(y_exp, ids_exp),
+            pg=(y_pg, ids_pg),
         )
 
-        xhat = xhat.squeeze(dim=0).roll(n_fd // 2)
+        def run_and_append(schedule: str, algorithm: str):
+            (xhat, xvar) = funcs[algorithm](*data[schedule])
+            append(xhat=xhat, var=xvar, schedule=schedule, algorithm=algorithm)
 
-        append(xhat=xhat, schedule="ans", algorithm="ists")
-
-        # === Uniform + VRLS ===
-        (mu_unif, gamma_unif, _, _) = algo.vrls(
-            y_unif,
-            ids_unif,
-            tau=tau,
-            xi=tau,
-            n=n_fd,
-            niter=niter,
-        )
-
-        mu_unif = mu_unif.squeeze(dim=0).roll(n_fd // 2)
-        gamma_unif = gamma_unif.squeeze(dim=0).roll(n_fd // 2)
-
-        append(xhat=mu_unif, var=gamma_unif, schedule="unif", algorithm="vrls")
-
-        # === Uniform + IST ===
-        (xhat_unif, _) = algo.ists(
-            y_unif,
-            ids_unif,
-            mu=0.98,
-            n=n_fd,
-            niter=niter * 10,
-        )
-
-        xhat_unif = xhat_unif.squeeze(dim=0).roll(n_fd // 2)
-
-        append(xhat=xhat_unif, schedule="unif", algorithm="ists")
-
-        # === Exponential + VRLS ===
-        (mu_exp, gamma_exp, _, _) = algo.vrls(
-            y_exp,
-            ids_exp,
-            tau=tau,
-            xi=tau,
-            n=n_fd,
-            niter=niter,
-        )
-
-        mu_exp = mu_exp.squeeze(dim=0).roll(n_fd // 2)
-        gamma_exp = gamma_exp.squeeze(dim=0).roll(n_fd // 2)
-
-        append(xhat=mu_exp, var=gamma_exp, schedule="exp", algorithm="vrls")
-
-        # === Exponential + IST ===
-        (xhat_exp, _) = algo.ists(
-            y_exp,
-            ids_exp,
-            mu=0.98,
-            n=n_fd,
-            niter=niter * 10,
-        )
-
-        xhat_exp = xhat_exp.squeeze(dim=0).roll(n_fd // 2)
-
-        append(xhat=xhat_exp, schedule="exp", algorithm="ists")
-
-        # === Poisson-gap + VRLS ===
-        (mu_pg, gamma_pg, _, _) = algo.vrls(
-            y_pg,
-            ids_pg,
-            tau=tau,
-            xi=tau,
-            n=n_fd,
-            niter=niter,
-        )
-
-        mu_pg = mu_pg.squeeze(dim=0).roll(n_fd // 2)
-        gamma_pg = gamma_pg.squeeze(dim=0).roll(n_fd // 2)
-
-        append(xhat=mu_pg, var=gamma_pg, schedule="pg", algorithm="vrls")
-
-        # === Poisson-gap + IST ===
-        (xhat_pg, _) = algo.ists(
-            y_pg,
-            ids_pg,
-            mu=0.98,
-            n=n_fd,
-            niter=niter * 10,
-        )
-
-        xhat_pg = xhat_pg.squeeze(dim=0).roll(n_fd // 2)
-
-        append(xhat=xhat_pg, schedule="pg", algorithm="ists")
+        for schedule in ("ans", "unif", "exp", "pg"):
+            for algorithm in ("vrls", "fmf", "ists"):
+                if (schedule, algorithm) != ("ans", "vrls"):
+                    run_and_append(schedule, algorithm)
     return (data,)
 
 
