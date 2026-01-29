@@ -7,3 +7,8 @@ writeup/figure-4.pdf filter=lfs diff=lfs merge=lfs -text
 writeup/figure-5.pdf filter=lfs diff=lfs merge=lfs -text
 writeup/figure-6.pdf filter=lfs diff=lfs merge=lfs -text
 writeup/graphical-abstract.pdf filter=lfs diff=lfs merge=lfs -text
+writeup/figure-s1.pdf filter=lfs diff=lfs merge=lfs -text
+writeup/figure-s2.pdf filter=lfs diff=lfs merge=lfs -text
+writeup/figure-s3.pdf filter=lfs diff=lfs merge=lfs -text
+writeup/figure-s4.pdf filter=lfs diff=lfs merge=lfs -text
+writeup/figure-s5.pdf filter=lfs diff=lfs merge=lfs -text
