@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.19.6"
+__generated_with = "0.19.7"
 app = marimo.App(width="medium")
 
 
@@ -48,6 +48,7 @@ def _(np, pd):
         new_df = df.copy(deep=False)
         error = pd.concat((error_ans, error_unif, error_exp, error_pg))
         new_df["rel_error_by_algorithm"] = error
+        new_df["is_improved_by_algorithm"] = error.ge(0)
         return new_df
     return (relative_error_by_algorithm,)
 
@@ -71,6 +72,7 @@ def _(np, pd):
         new_df = df.copy(deep=False)
         error = pd.concat((error_vrls, error_ists, error_fmf))
         new_df["rel_error_by_schedule"] = error
+        new_df["is_improved_by_schedule"] = error.ge(0)
         return new_df
     return (relative_error_by_schedule,)
 
@@ -96,8 +98,41 @@ def _(full_df):
 
 
 @app.cell
-def _(Path, full_df, plt, sns):
-    (fig, ax) = plt.subplots(figsize=(6, 4))
+def _(full_df, pd):
+    def _fraction(region: str, schedule: str, min_sparsity: float) -> float:
+        _query = (
+            f"region == '{region}' "
+            f"and schedule == '{schedule}' "
+            f"and min_sparsity == {min_sparsity} "
+            f"and algorithm == 'vrls'"
+        )
+        return full_df.query(_query).is_improved_by_algorithm.mean().item()
+
+    _data = [
+        dict(
+            region=region,
+            schedule=schedule,
+            min_sparsity=min_sparsity,
+            fraction=_fraction(region, schedule, min_sparsity),
+        )
+        for region in ("noise", "signal", "total")
+        for schedule in ("unif", "exp", "pg")
+        for min_sparsity in (0.05, 0.1, 0.2)
+    ]
+
+    fraction_df = pd.DataFrame(_data)
+    return (fraction_df,)
+
+
+@app.cell
+def _(fraction_df):
+    fraction_df
+    return
+
+
+@app.cell
+def _(Path, fraction_df, full_df, plt, sns):
+    (fig, (left, right)) = plt.subplots(nrows=1, ncols=2, figsize=(12, 4))
 
     sns.barplot(
         x="sigma",
@@ -108,7 +143,7 @@ def _(Path, full_df, plt, sns):
             " and schedule == 'unif'"
             " and algorithm == 'vrls'"
         ),
-        ax=ax,
+        ax=left,
         palette=[
             (0.8,) * 3,
             (0.6,) * 3,
@@ -116,16 +151,53 @@ def _(Path, full_df, plt, sns):
         ]
     )
 
-    ax.set_xlabel(r"Measurement noise ($\sigma$)")
-    ax.set_ylabel("Relative error reduction")
-    ax.grid(color=(0.9,) * 3)
-    ax.set_axisbelow(True)
+    sns.barplot(
+        x="schedule",
+        y="fraction",
+        hue="region",
+        data=fraction_df,
+        ax=right,
+        palette=[
+            (0.8,) * 3,
+            (0.6,) * 3,
+            (0.4,) * 3,
+        ]
+    )
 
-    legend = ax.get_legend()
-    legend.set_title("Undersampling")
-    legend.texts[0].set_text("5%")
-    legend.texts[1].set_text("10%")
-    legend.texts[2].set_text("20%")
+    left.set_xlabel(r"Measurement noise ($\sigma$)")
+    left.set_ylabel("Relative error reduction")
+    left.grid(color=(0.9,) * 3)
+    left.set_axisbelow(True)
+    left.text(
+        0, 0.57, "(a)",
+        fontweight="bold",
+        horizontalalignment="center",
+    )
+
+    right.set_xlabel("Schedule")
+    right.set_ylabel("Probability of improvement")
+    right.grid(color=(0.9,) * 3)
+    right.set_axisbelow(True)
+    right.text(
+        0, 0.95, "(b)",
+        fontweight="bold",
+        horizontalalignment="center",
+    )
+
+    left_legend = left.get_legend()
+    left_legend.set_title("Undersampling")
+    left_legend.texts[0].set_text("5%")
+    left_legend.texts[1].set_text("10%")
+    left_legend.texts[2].set_text("20%")
+
+    right_legend = right.get_legend()
+    right_legend.set_title("Spectral region")
+    right_legend.texts[0].set_text("Noise")
+    right_legend.texts[1].set_text("Signal")
+    right_legend.texts[2].set_text("Total")
+
+    right.set_xticks(["unif", "exp", "pg"])
+    right.set_xticklabels(["Uniform", "Exponential", "Poisson-gap"])
 
     figure_path = Path.cwd() / "figures" / "figure-3.pdf"
     figure_path.parent.mkdir(exist_ok=True)
