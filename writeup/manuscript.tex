@@ -147,45 +147,187 @@ an algorithm specifically tailored for ANS.
 % ============================================================================
 \section{Theory}
 \label{sec:theory}
-This work considers the most common special case of NUS, where signals are
-acquired in complete quadrature on a uniform (Nyquist) sampling grid and
-direct-dimension free induction decays are observed for a subset of the
-indirect-dimension grid points based on a sampling schedule.
-Without loss of generality, the following equations
-will focus on the reconstruction of a single indirect-dimension slice. It is
-worth mentioning that the established convention of processing acquired
-direct-dimension traces followed by independent reconstructions along the
-remaining dimensions effectively ignores nontrivial correlations in the data.
-However, this practice is necessary to meet the speed requirement of ANS.
+The proposed algorithms strongly connect with a broad array of existing
+reconstruction methods, making an initial exposition of relevant theory
+necessary.
 
-FIXME---Outline of this section!
+This section begins by reintroducing \emph{iteratively
+reweighted least squares} (IRLS) as a classical method for solving sparse
+recovery problems in compressed sensing. The machinery of Bayesian inference
+is then brought to bear in order to demonstrate that IRLS naturally arises
+as the \emph{maximum a posteriori} (MAP) estimator of a particular
+probability distribution. The additional machinery of variational
+approximation is then employed to construct \emph{variationally reweighted
+least squares} (VRLS), which is functionally similar to IRLS but yields
+posterior mean and variance estimates. Finally, ANS is developed around
+VRLS.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=1.0\textwidth]{figure-1.pdf}
+\caption{%
+ (a) $^1$H--$^{15}$N HSQC spectrum reconstructed from 4\%-sparse
+ ($m/n=40/1024$) measurements using VRLS. (b) One-dimensional slice taken
+ from the reconstruction in (a) overlaid with the square root of its
+ accompanying variance estimate.
+}
+\label{fig:hsqc}
+\end{figure*}
 
 \subsection{Sparse recovery}
 \label{subsec:sparse}
-FIXME
+In compressed sensing, the concept of sparsity is leveraged to estimate
+complete signals from incomplete measurements \cite{candes:ieeeit2006,%
+donoho:ieeeit2006}. In the context of NUS NMR, the measured data vector
+$\m{y}$ is the result of applying the measurement operator $\m{A}$ to
+an unknown spectrum $\m{x}$ and adding noise corruptions $\m{\epsilon}$,
+i.e.:
+\begin{equation}
+\m{y} = \m{A} \m{x} + \m{\epsilon},
+\label{eq:signalmodel}
+\end{equation}
+where the $m \times n$ matrix $\m{A} = \m{B} \m{\Phi}$ is the product
+of a subsampling matrix $\m{B}$ and an inverse discrete Fourier transform
+(iDFT) matrix $\m{\Phi}$. Because $\m{A}$ has fewer rows than columns
+($m < n$), we cannot solve \eqref{eq:signalmodel} for $\m{x}$ without
+additional information.
+
+To estimate $\m{x}$ despite the limited number of measurements, we include
+the assumption that $\m{x}$ is \emph{sparse} (mostly zero) as an additional
+source of information. The maximally sparse spectral estimate that agrees
+exactly with the measured data is given by the solution to the following
+problem:
+\begin{equation}
+\begin{aligned}
+ \underset{\m{x}}{\text{minimize}} &\; \|\m{x}\|_0 \\
+ \text{such that} &\; \m{y} = \m{A} \m{x}
+\end{aligned}
+\label{eq:l0}
+\end{equation}
+While conceptually appealing, this combinatorial problem is too
+computationally expensive to be tractable for even modestly sized $\m{x}$.
+Thus, the convex relaxation of \eqref{eq:l0} is preferred:
+\begin{equation}
+\begin{aligned}
+ \underset{\m{x}}{\text{minimize}} &\; \|\m{x}\|_1 \\
+ \text{such that} &\; \m{y} = \m{A} \m{x}
+\end{aligned}
+\label{eq:l1}
+\end{equation}
+This problem may be efficiently solved by a variety of methods, including
+\emph{iterative soft thresholding} (IST, \cite{stern:jmr2007}) and its
+accelerated cousin NESTA \cite{becker:siam2011,sun:jbnmr2015}.
+
+The $\ell_1$ norm above is hardly the only sparsity-encoding function at our
+disposal. In fact the Hoch-Hore entropy function has a much longer history
+of use in NMR data processing \cite{hoch:jmr2017} and has the added benefit
+of being smooth \cite{worley:jmr2016a}. Non-convex functions have also been
+used with NMR data \cite{kazimierczuk:jmr2011,worley:ieeetsp2019}, but their
+use abrogates any existing guarantees that the obtained solution is globally
+optimal. Among all sparsing-encoding functions, the $\ell_1$ norm is uniquely
+qualified as the ``least convex'' convex function: it encodes sparsity more
+strongly than any other convex function.
+
+This work considers the most common special case of NUS NMR, where signals
+are acquired in complete quadrature on a uniform (Nyquist) sampling grid
+and direct-dimension free induction decays are observed for a subset of
+the indirect-dimension grid points based on a sampling schedule. Without
+loss of generality, the following equations will focus on the reconstruction
+of a single indirect-dimension slice. It is worth mentioning that the common
+convention of processing acquired direct-dimension traces followed by
+independent reconstructions along the remaining dimensions effectively
+ignores nontrivial correlations in the data. However, this practice is
+necessary to meet the speed requirement of ANS.
 
 \subsection{Bias-variance tradeoffs}
-\label{subsec:bvtradeoff}
-FIXME
+\label{subsec:bvtrade}
+Because an unknown noise corruption $\m{\epsilon}$ was added during the
+measurement of $\m{y}$, enforcing exact agreement during reconstruction
+is unreasonable, and effectively increases the variance of the estimate. As
+is standard practice, we may assume that the noise corruptions are
+independently and identically normally distributed with zero mean and
+variance $\sigma^2$,
+i.e.~$\m{\epsilon} \sim \mathcal{N}(\m{0}, \sigma^2 \m{I})$,
+and that $\sigma$ is known exactly or to reasonable precision.
+In that case, we may relax the data agreement constraint to yield an
+inequality-constrained problem,
+\begin{equation}
+\begin{aligned}
+ \underset{\m{x}}{\text{minimize}} &\; \|\m{x}\|_1 \\
+ \text{such that} &\; \| \m{y} - \m{A} \m{x} \|_2^2 \le m \sigma
+\end{aligned}
+\label{eq:l1_ineq}
+\end{equation}
+As $\sigma$ is increased, the estimate is biased \emph{away} from the
+measured data in favor of decreasing the $\ell_1$ norm, thus reducing
+variance. In NUS NMR, this bias-variance tradeoff manifests as a
+``linearity vs.~artifact'' tradeoff: low-bias methods that preserve
+linearity of spectral integrals can more readily introduce spurious
+artifacts than low-variance methods that sacrifice linearity in order
+to suppress artifacts.
+
+The problem \eqref{eq:l1_ineq} may be relaxed into an unconstrained
+form by introducing a Lagrange multiplier $\zeta$ for its constraint,
+\begin{equation}
+\underset{\m{x}}{\text{minimize}} \left\{
+ \|\m{x}\|_1 + \zeta \, \| \m{y} - \m{A} \m{x} \|_2^2
+ \right\}
+\label{eq:l1_uncon}
+\end{equation}
+where $\zeta$ embodies the bias-variance tradeoff, as it balances the
+relative importance of the $\ell_1$ (sparsity) and $\ell_2$ (data fit)
+terms in the objective function.
 
 \subsection{Iteratively reweighted least squares}
 \label{subsec:irls}
-FIXME
+The discontinuity of the $\ell_1$ norm at the origin raises challenges
+when constructing minimization algorithms. Successful approaches rely
+on incorporating smoothness. For example, IST and NESTA both introduce
+strongly convex prox-functions into their objectives
+\cite{beck:siam2009,becker:siam2011}.
 
-\subsection{Probabilistic construction}
-\label{subsec:bayes}
-We begin with the standard fixed-basis \cite{worley:cmr2018}
-measurement model,
+Another natural approach to incorporating smoothness is by locally
+approximating the $\ell_1$ norm by a quadratic function, i.e.:
 \begin{equation}
-\label{eq:signalmodel}
-\boldsymbol{y} = \m{A} \m{x} + \m{\epsilon}
+\|\m{x}\|_1 =
+ \sum_{i=1}^n |x_i| =
+ \sum_{i=1}^n \frac{|x_i|^2}{|x_i|} \approx
+ \sum_{i=1}^n \frac{|x_i|^2}{|z_i|} =
+ \m{x}^\top \m{W} \m{x}
+\label{eq:l1_local_quad}
 \end{equation}
-where $\m{y}$ are the observed time-domain data, $\m{x}$ is the spectrum
-to be estimated, and $\m{\epsilon}$ is independently and identically
-normally distributed noise with zero mean and precision $\tau$. The
-$m \times n$ matrix $\m{A} = \m{B} \m{\Phi}$ is composed of a subsampling
-matrix $\m{B}$ and a discrete Fourier transform (DFT) matrix $\m{\Phi}$.
-Putting these together yields the likelihood,
+where $\m{z}$ is the point around which the approximation is made,
+$\m{W}$ is a diagonal matrix containing the weights $1 / |z_i|$.
+Substituting this local approximation back into e.g.~\eqref{eq:l1}
+results in a simple minimization algorithm composed of two steps per
+iteration:
+\begin{enumerate}
+ \item $\m{x} \gets \m{W}^{-1} \m{A}^\top
+        \left( \m{A} \m{W}^{-1} \m{A}^\top \right)^{-1} \m{y}$
+ \item $\forall i : W_{ii} \gets |x_i|^{-1}$
+\end{enumerate}
+which is a form of \emph{iteratively reweighted least squares}
+(IRLS, \cite{daubechies:cpam2010,kazimierczuk:jmr2011}).
+
+One particularly serious flaw exists in the above algorithm: if any
+$x_i \to 0$, as is often the case in sparse recovery, its accompanying
+weight $W_{ii} \to \infty$. To avoid this, the weight update is modified
+into $W_{ii} \gets (|x_i|^2 + c)^{-1/2}$, where $c > 0$ is a
+small correction term \cite{daubechies:cpam2010}. For suitably chosen
+$c$, the modified algorithm still converges to the solution of
+\eqref{eq:l1}.
+
+\subsection{Bayesian inference}
+\label{subsec:bayes}
+Because the quantities of interest in compressed sensing are either unknown
+or uncertain, and because ANS specifically requires the estimation of
+such uncertainty, it is reasonable to apply the framework of Bayesian
+probability theory \cite{ohagan2004}.
+
+We first define the likelihood of observing the data $\m{y}$ from some
+known spectrum $\m{x}$. Assuming $\m{\epsilon}$ is independently and
+identically normally distributed noise with zero mean and precision
+$\tau = 1/\sigma^2$ yields the likelihood,
 \begin{equation}
 p(\m{y} \mid \m{x}, \tau) =
  (2 \pi)^{-\frac{m}{2}} \tau^{\frac{m}{2}} \exp\left\{
@@ -206,7 +348,7 @@ p(w_i \mid \xi) =
   -\frac{\xi}{2} w_i^{-1}
  \right\}
 \end{equation}
-results in a conditional distribution,
+results in the following conditional distribution,
 \begin{equation}
 \begin{aligned}
 \label{eq:joint}
@@ -218,17 +360,61 @@ p(&\m{y}, \m{x}, \m{w} \mid \xi, \tau) \propto \\
  \right\}
 \end{aligned}
 \end{equation}
-which will be of central importance in subsequent derivations. While it does
-not appear related to other sparsity-inducing priors, this distribution can
-generate a broad range of $\ell_1$ iteratively reweighted least squares
-(IRLS, \cite{daubechies:cpam2010,kazimierczuk:jmr2011})
-algorithms.\footnote{%
+which will be of central importance in subsequent derivations.
+
+By construction, the conditional distribution \eqref{eq:joint} can generate
+a broad range of $\ell_1$-IRLS algorithms.\footnote{%
  See the notes in \url{http://github.com/geekysuavo/irls-sandbox}
  for a more complete overview of $\ell_1$-IRLS algorithms derived
  from this joint distribution.}
+Moreover, marginalizing $\m{w}$ out of this distribution produces a
+familiar distribution,
+\begin{equation}
+\begin{aligned}
+\label{eq:marginal}
+p(\m{y}, \m{x} \mid \xi, \tau) &\propto
+ \int \mathrm{d}\m{w} p(\m{y}, \m{x}, \m{w} \mid \xi, \tau)
+\\ &\propto
+ \exp\left\{
+  -\frac{\tau}{2} \| \m{y} - \m{A} \m{x} \|_2^2
+  -\sqrt{\xi} \| \m{x} \|_1
+ \right\}
+\end{aligned}
+\end{equation}
+whose \emph{maximum a posteriori} (MAP) estimate of $\m{x}$ corresponds
+to the solution of problem \eqref{eq:l1_uncon} with
+$\zeta = \tau/(2\sqrt{\xi})$,
+\begin{equation}
+\begin{aligned}
+\m{\hat x}_{\text{MAP}} &=
+ \underset{\m{x}}{\arg\max} \; p(\m{x} \mid \m{y}, \xi, \tau)
+\\ &=
+ \underset{\m{x}}{\arg\max} \; p(\m{y}, \m{x} \mid \xi, \tau)
+\\ &=
+ \underset{\m{x}}{\arg\min} \left\{
+  -\ln p(\m{y}, \m{x} \mid \xi, \tau)
+ \right\}
+\\ &=
+ \underset{\m{x}}{\arg\min} \left\{
+  \| \m{x} \|_1 +
+  \tfrac{\tau}{2 \sqrt{\xi}} \| \m{y} - \m{A} \m{x} \|_2^2
+ \right\}
+\end{aligned}
+\end{equation}
+While $\m{\hat x}_{\text{MAP}}$ is often a useful point estimate of the
+spectrum, ANS requires a more complete description of
+$p(\m{x} \mid \m{y}, \xi, \tau)$ than the location of its maximum.
+Unfortunately, continuing with a fully Bayesian treatment yields
+diminishing returns beyond this point, as the marginal distribution
+\eqref{eq:marginal} is not analytically tractable. While Monte Carlo
+may be used to estimate the desired quantities, this approach is
+computationally expensive, stochastic, and slow to converge.
 
-Continuing with a fully Bayesian treatment yields diminishing returns beyond
-this point, so we employ variational inference \cite{wainwright:ftml2008} to
+\subsection{Variationally reweighted least squares}
+\label{subsec:vrls}
+FIXME---Elaborate on all statements made beyond this point.
+
+We employ variational inference \cite{wainwright:ftml2008} to
 approximate the posterior over $\m{x}$ and $\m{w}$ by a distribution of the
 form $q(\m{x}, \m{w}) = q_x(\m{x}) \, q_w(\m{w})$ that minimizes the
 variational free energy,
@@ -268,8 +454,6 @@ approximation in which $\m{\Gamma}$ is diagonal, the matrix
 $\m{\Phi} \m{\Gamma} \m{\Phi}^\top$ would be circulant, and therefore
 useless in the task of identifying maximally informative grid points.
 
-\subsection{Variationally reweighted least squares}
-\label{subsec:vrls}
 The VRLS algorithm is obtained by directly applying alternating minimization
 to $F(\m{\eta})$. The simplest of these updates is that of the weights
 $\m{\nu}$, which is obtained by setting each
@@ -321,18 +505,6 @@ Detailed derivations of these computations are provided in the
 To summarize, VRLS is a globally convergent algorithm that minimizes the
 convex objective function \eqref{eq:objective}, with a per-iteration cost
 of $\mathcal{O}(n \log n + m^2 n + m^3)$ operations.
-
-\begin{figure*}[t]
-\centering
-\includegraphics[width=1.0\textwidth]{figure-1.pdf}
-\caption{%
- (a) $^1$H--$^{15}$N HSQC spectrum reconstructed from 4\%-sparse
- measurements using VRLS. (b) One-dimensional slice taken from the
- reconstruction in (a) overlaid with the square root of its
- accompanying variance estimate.
-}
-\label{fig:hsqc}
-\end{figure*}
 
 \subsection{Extensions to VRLS}
 \label{subsec:extensions}
@@ -483,9 +655,9 @@ for ANS, and full ANS experiments were simulated in order to analyze the
 resulting schedules and determine the conditions in which successful ANS
 acquisition is feasible.
 
-\begin{figure}[t]
+\begin{figure*}[h]
 \centering
-\includegraphics[width=\halfsize]{figure-3.pdf}
+\includegraphics[width=1.0\textwidth]{figure-3.pdf}
 \caption{%
  Relative mean-squared error reductions
  $(L_{\mathrm{NUS}}-L_{\mathrm{ANS}})/L_{\mathrm{NUS}}$ in the
@@ -494,10 +666,10 @@ acquisition is feasible.
  generated parameters.
 }
 \label{fig:errors}
-\end{figure}
+\end{figure*}
 
 % ============================================================================
-\section{Results}
+\section{Results and discussion}
 \label{sec:results}
 
 \subsection{Reconstruction quality and runtime}
