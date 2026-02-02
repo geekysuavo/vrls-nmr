@@ -412,26 +412,38 @@ computationally expensive, stochastic, and slow to converge.
 
 \subsection{Variationally reweighted least squares}
 \label{subsec:vrls}
-FIXME---Elaborate on all statements made beyond this point.
-
-We employ variational inference \cite{wainwright:ftml2008} to
-approximate the posterior over $\m{x}$ and $\m{w}$ by a distribution of the
-form $q(\m{x}, \m{w}) = q_x(\m{x}) \, q_w(\m{w})$ that minimizes the
-variational free energy,
+We employ variational methods \cite{wainwright:ftml2008} to
+approximate the posterior distribution
+$p(\m{x}, \m{w} \mid \m{y}, \xi, \tau)$ with a tractable distribution
+$q(\m{x}, \m{w})$. To achieve this, we restrict $q$ to the family of
+distributions that factorize as follows,
 \begin{equation}
+\label{eq:family}
+\mathcal{Q} = \{ q : q(\m{x}, \m{w}) = q_x(\m{x}) \, q_w(\m{w}) \}
+\end{equation}
+
+Given a choice of variational family $\mathcal{Q}$, we find the exact
+form of $q$ by minimizing the variational free energy functional,
+\begin{equation}
+\label{eq:functional}
 F(q) =
  -\mathbb{E}_{q(\m{x},\m{w})}[\ln p(\m{y}, \m{x}, \m{w}, \mid \xi, \tau)]
  -\mathbb{H}[q(\m{x},\m{w})]
 \end{equation}
-Noting that the minimizing factors $q_x$ and $q_w$ are a multivariate
-normal distribution and a product of inverse normal distributions,
-respectively,
+over all distributions $q \in \mathcal{Q}$. Formally, this requires the
+calculus of variations. However in practice, we may identify $q_x$ and
+$q_w$ by taking the logarithm of \eqref{eq:joint} and collecting terms
+involving either $\m{x}$ or $\m{w}$, respectively \cite{worley:cmr2018}.
+Following this procedure, we see that the minimizing factors $q_x$ and
+$q_w$ are a multivariate normal distribution and a product of inverse
+normal distributions, respectively,
 \begin{align}
 q_x(\m{x}) &= \mathcal{N}_n(\m{\mu}, \m{\Gamma})
 \\
 q_w(w_i) &= \mathcal{IN}(\nu_i, \lambda_i)
 \end{align}
-we rewrite the functional $F(q)$ as a function of the nontrivial
+making $q(\m{x}, \m{w}) = q_x(\m{x}) \prod_i q_w(w_i)$. With these definitions
+in hand, we may rewrite the functional $F(q)$ as a function of the nontrivial
 parameters of $q$, namely $\m{\eta} = \{ \m{\mu}, \m{\Gamma}, \m{\nu} \}$,
 \begin{equation}
 \begin{aligned}
@@ -445,31 +457,28 @@ F(\m{\eta}) &=
 +\frac{\xi}{2} {\textstyle\sum}_i \nu_i^{-1}
 \end{aligned}
 \end{equation}
-
-The decision to leave $q_x$ intact in the variational family is intentional.
-A crucial component of ANS is the posterior predictive covariance of the
-complete signal $\m{\hat y}$, which is equal to
-$\m{\Phi} \m{\Gamma} \m{\Phi}^\top$. Had we sought a fully mean-field
-approximation in which $\m{\Gamma}$ is diagonal, the matrix
-$\m{\Phi} \m{\Gamma} \m{\Phi}^\top$ would be circulant, and therefore
-useless in the task of identifying maximally informative grid points.
+by substituting $q(\m{x}, \m{w})$ into \eqref{eq:functional} and then
+minimizing with respect to $\m{\lambda}$, whose optimal value does not
+depend on $\m{\eta}$.
 
 The VRLS algorithm is obtained by directly applying alternating minimization
-to $F(\m{\eta})$. The simplest of these updates is that of the weights
-$\m{\nu}$, which is obtained by setting each
+updates to $F(\m{\eta})$. The simplest of these updates is that of the
+weights $\m{\nu}$, which is obtained by setting each
 $\partial_{\nu_i} F(\m{\eta}) = 0$ and solving for $\nu_i$,
 \begin{equation}
+\label{eq:nu_update}
 \nu_i \gets \sqrt{\xi (|\mu_i|^2 + \Gamma_{ii})^{-1}}
 \end{equation}
-This mirrors the $\ell_1$-IRLS update of $w_i \gets |x_i|^{-1}$ with
-several interesting advantages. In IRLS, a small correction term $c$ is
-often added to the update to obtain $w_i \gets (x_i^2 + c)^{-1/2}$ in order
-to avoid singularities as $x_i \to 0$ \cite{daubechies:cpam2010}. VRLS
-elegantly uses the marginal variance $\Gamma_{ii}$ as an adaptive
-correction.
+This mirrors the corrected $\ell_1$-IRLS update defined in
+\S\ref{subsec:irls}, but replaces the constant correction term $c$ with
+the marginal variance $\Gamma_{ii}$. Thus, VRLS elegantly avoids singularities
+by adaptively smoothing the weight update of each spectral point based on its
+estimated uncertainty.
 
-Naively updating either $\m{\mu}$ or $\m{\Gamma}$ in the same fashion
-will result in expressions involving dense $n \times n$ matrix inverses,
+To complete an iteration of VRLS, we need to update the remaining parameters
+in $\m{\eta}$. However, naively updating either $\m{\mu}$ or $\m{\Gamma}$ in
+the same fashion as $\m{\nu}$ will result in expressions involving dense
+$n \times n$ matrix inverses,
 \begin{equation}
 \begin{aligned}
 \m{\Gamma} &\gets (\m{V} + \tau \m{A}^\top \m{A})^{-1}
@@ -483,6 +492,7 @@ using the matrix inversion lemma \cite{boyd2004},
 \begin{align}
 \m{C} &= \m{\Phi} \m{V}^{-1} \m{\Phi}^\top
 \\
+\label{eq:kernel_update}
 \m{K} &= \tau^{-1} \m{I} + \m{B} \m{C} \m{B}^\top
 \\
 \m{\Gamma} &= \m{V}^{-1} - \m{V}^{-1} \m{A}^\top \m{K}^{-1} \m{A} \m{V}^{-1}
@@ -492,6 +502,7 @@ is a circulant $n \times n$ matrix whose elements may be computed using a
 fast Fourier transform (FFT). With these definitions in hand, the mean
 update becomes,
 \begin{equation}
+\label{eq:mu_update}
 \m{\mu} \gets \m{V}^{-1} \m{A}^\top \m{K}^{-1} \m{y}
 \end{equation}
 which no longer requires the full covariance matrix $\m{\Gamma}$. In fact,
@@ -499,22 +510,51 @@ the updates to $\m{\nu}$ only require the diagonal elements of $\m{\Gamma}$,
 and the posterior predictive variances of $\m{\hat y}$ only require the
 diagonal elements of $\m{\Phi} \m{\Gamma} \m{\Phi}^\top$. Both of these
 benefit from kernelization, requiring only $\mathcal{O}(m^2 n)$ operations.
-Detailed derivations of these computations are provided in the
+For example, any diagonal element $\Gamma_{ii}$ may be computed using the
+matrix inversion lemma,
+\begin{equation}
+\label{eq:gamma_update}
+\Gamma_{ii} \gets
+ \nu_i^{-1} - \nu_i^{-2} \m{e}_i^\top \m{A}^\top \m{K}^{-1} \m{A} \m{e}_i
+\end{equation}
+where $\m{e}_i$ denotes the $i$-th column of the $n \times n$ identity
+matrix. Detailed derivations of these computations are provided in the
 \nameref{app:si}.
 
 To summarize, VRLS is a globally convergent algorithm that minimizes the
 convex objective function \eqref{eq:objective}, with a per-iteration cost
-of $\mathcal{O}(n \log n + m^2 n + m^3)$ operations.
+of $\mathcal{O}(n \log n + m^2 n + m^3)$ operations. One iteration of VRLS
+involves the following steps:
+\begin{enumerate}
+ \item Compute $\m{K}$ using equation \eqref{eq:kernel_update}.
+ \item Update $\m{\mu}$ using equation \eqref{eq:mu_update}.
+ \item Update each $\Gamma_{ii}$ using equation \eqref{eq:gamma_update}.
+ \item Update each $\nu_i$ using equation \eqref{eq:nu_update}.
+\end{enumerate}
+In subsequent sections, we consider modifications to VRLS and develop an
+ANS algorithm that uses VRLS as a subroutine.
 
 \subsection{Extensions to VRLS}
 \label{subsec:extensions}
-While VRLS only requires handling a small $m \times m$ kernel matrix, it
-is nevertheless matrix-bound. A matrix-free fast mean-field variant of
-VRLS may be easily constructed using majorize-minimization techniques
-\cite{worley:ieeetsp2019}. Because it forms a mean-field approximation
-of the posterior, it cannot be used in ANS. Even so, we derive the fast
-mean-field updates to $\m{\mu}$ and $\Gamma_{ii}$ in the \nameref{app:si}
-to analyze its performance relative to full VRLS.
+The decision to leave $q_x$ intact in the variational family $\mathcal{Q}$
+is intentional in VRLS. A crucial component of ANS is the posterior
+predictive covariance matrix of the complete time-domain signal
+$\m{\hat y} = \m{\Phi} \m{x}$, which is equal to
+$\m{\Phi} \m{\Gamma} \m{\Phi}^\top$. Had we instead restricted $q$ to
+a fully factorized \emph{mean-field} family,
+\begin{equation}
+\mathcal{Q}_{\mathrm{MF}} =
+ \{ q : q(\m{x}, \m{w}) = {\textstyle\prod_i} q_x(x_i) \, q_w(w_i) \}
+\end{equation}
+the frequency-domain covariance matrix $\m{\Gamma}$ would become diagonal,
+and the time-domain covariance matrix  $\m{\Phi} \m{\Gamma} \m{\Phi}^\top$
+would become circulant, and therefore
+useless in the task of identifying maximally informative grid points.
+Nevertheless, the resulting fast mean-field VRLS (FMF-VRLS) algorithm can
+be made matrix-free using majorize-minimization techniques
+\cite{worley:ieeetsp2019}. The fast mean-field updates to $\m{\mu}$
+and $\Gamma_{ii}$ are derived in the \nameref{app:si} to analyze
+its performance relative to full VRLS.
 
 As written, the VRLS algorithm depends on \emph{a priori} knowledge of the
 noise precision $\tau$ and weight parameter $\xi$. While $\tau$ may be
