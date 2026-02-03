@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.19.6"
+__generated_with = "0.19.7"
 app = marimo.App(width="medium")
 
 
@@ -78,7 +78,9 @@ def _(partial, sim):
     ):
         ground_truth = sim.Signal.build(
             num_components=num_components,
-            frequencies=partial(sim.random_spaced, lower=-0.5, upper=0.5, space=2 * decay_rate),
+            frequencies=partial(
+                sim.random_spaced, lower=-0.5, upper=0.5, space=2 * decay_rate
+            ),
             decayrates=partial(sim.random_chisq, dof=20, mean=decay_rate),
             amplitudes=partial(sim.random_chisq, dof=amplitude_dof, mean=1.0),
             phases=partial(sim.random_normal, mean=0.0, stdev=1.0e-6),
@@ -120,14 +122,19 @@ def _(Tensor, space_names, torch):
                 n_initial=n_initial or n_final,
                 m_final=m_final,
                 n_final=n_final,
+                n_out=x0.size(dim=0),
                 schedule=schedule,
                 algorithm=algorithm,
             ),
         }
 
-        signal_mse = (xhat - x0)[mask].abs().square().mean().item()
-        noise_mse = (xhat - x0)[~mask].abs().square().mean().item()
-        total_mse = (xhat - x0).abs().square().mean().item()
+        signal_sumsq = (xhat - x0)[mask].abs().square().sum().item()
+        noise_sumsq = (xhat - x0)[~mask].abs().square().sum().item()
+        total_sumsq = (xhat - x0).abs().square().sum().item()
+
+        signal_norm = x0[mask].abs().square().sum().item()
+        noise_norm = x0[~mask].abs().square().sum().item()
+        total_norm = x0.abs().square().sum().item()
 
         if var is None:
             signal_var = torch.nan
@@ -138,13 +145,28 @@ def _(Tensor, space_names, torch):
             noise_var = var[~mask].mean().item()
             total_var = var.mean().item()
 
-        entry = dict(region="signal", error=signal_mse, variance=signal_var)
+        entry = dict(
+            region="signal",
+            norm=signal_norm,
+            sumsq=signal_sumsq,
+            variance=signal_var,
+        )
         append_to.append({**entry_base, **entry})
 
-        entry = dict(region="noise", error=noise_mse, variance=noise_var)
+        entry = dict(
+            region="noise",
+            norm=noise_norm,
+            sumsq=noise_sumsq,
+            variance=noise_var,
+        )
         append_to.append({**entry_base, **entry})
 
-        entry = dict(region="total", error=total_mse, variance=total_var)
+        entry = dict(
+            region="total",
+            norm=total_norm,
+            sumsq=total_sumsq,
+            variance=total_var,
+        )
         append_to.append({**entry_base, **entry})
     return (append_entries,)
 
@@ -267,7 +289,7 @@ def _(
             return (xhat, None)
 
         funcs = dict(vrls=vrls, fmf=fmf, ists=ists)
-        data = dict(
+        inputs = dict(
             ans=(y, ids),
             unif=(y_unif, ids_unif),
             exp=(y_exp, ids_exp),
@@ -275,7 +297,7 @@ def _(
         )
 
         def run_and_append(schedule: str, algorithm: str):
-            (xhat, xvar) = funcs[algorithm](*data[schedule])
+            (xhat, xvar) = funcs[algorithm](*inputs[schedule])
             append(xhat=xhat, var=xvar, schedule=schedule, algorithm=algorithm)
 
         for schedule in ("ans", "unif", "exp", "pg"):
