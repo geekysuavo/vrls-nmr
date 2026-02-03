@@ -162,6 +162,7 @@ least squares} (VRLS), which is functionally similar to IRLS but yields
 posterior mean and variance estimates. Finally, ANS is developed around
 VRLS.
 
+% FIGURE ==========
 \begin{figure*}[t]
 \centering
 \includegraphics[width=1.0\textwidth]{figure-1.pdf}
@@ -410,6 +411,19 @@ diminishing returns beyond this point, as the marginal distribution
 may be used to estimate the desired quantities, this approach is
 computationally expensive, stochastic, and slow to converge.
 
+% FIGURE ==========
+\begin{figure}[t]
+\centering
+\includegraphics[width=\halfsize]{figure-2.pdf}
+\caption{%
+ On-GPU runtimes of VRLS ($n_{\mathrm{iter}}=100$, black) and
+ FMF-VRLS ($n_{\mathrm{iter}}=1000$, red) as a function of measurement
+ count $m$, grid point count $n$, and number of parallel reconstructions
+ $p$. Times are reported on a logarithmic scale.
+}
+\label{fig:time}
+\end{figure}
+
 \subsection{Variationally reweighted least squares}
 \label{subsec:vrls}
 We employ variational methods \cite{wainwright:ftml2008} to
@@ -534,6 +548,22 @@ involves the following steps:
 In subsequent sections, we consider modifications to VRLS and develop an
 ANS algorithm that uses VRLS as a subroutine.
 
+% FIGURE ==========
+\begin{figure*}[t]
+\centering
+\includegraphics[width=1.0\textwidth]{figure-3.pdf}
+\caption{%
+ (a) Relative mean-squared error reductions
+ $(L_{\mathrm{unif}}-L_{\mathrm{ANS}})/L_{\mathrm{unif}}$ in the
+ noise-only regions of VRLS reconstructions produced by uniform
+ random NUS and ANS. (b) Fraction of Monte Carlo trials in which
+ ANS had lower VRLS reconstruction errors than another \emph{a priori}
+ schedule. As $n_{\max}=2048$, undersampling rates of 5\%, 10\% and 20\%
+ correspond to $m_{\max}$ values of 102, 205 and 410, respectively.
+}
+\label{fig:errors}
+\end{figure*}
+
 \subsection{Extensions to VRLS}
 \label{subsec:extensions}
 The decision to leave $q_x$ intact in the variational family $\mathcal{Q}$
@@ -570,24 +600,31 @@ The extended VRLS objective and updates are derived in the \nameref{app:si}.
 To complete our ANS algorithm, we use VRLS to select time-domain grid points
 that have maximum expected information gain \cite{mackay:nc1992}. In our
 variational Bayesian framework, this is equivalent to selecting the grid
-points whose posterior predictive variance is largest. The complete
-time-domain signal $\m{\hat y} = \m{\Phi} \m{x}$ has the following
-mean and covariance:
-\begin{align}
-\mathbb{E}_{q(\m{x},\m{w})}[\m{\hat y}] &=
- \m{\Phi} \m{\mu}
-\\
-\mathrm{Cov}_{q(\m{x},\m{w})}[\m{\hat y}, \m{\hat y}] &=
- \m{\Phi} \m{\Gamma} \m{\Phi}^\top
-\end{align}
-so we compute the marginal variances and select a new grid point $i_*$
+points whose posterior predictive variance is largest. Because the VRLS
+estimate of the spectrum $\m{x}$ is a normal distribution with mean
+$\m{\mu}$ and covariance $\m{\Gamma}$, the complete time-domain signal
+$\m{\hat y} = \m{\Phi} \m{x}$ is also normally distributed,
 \begin{equation}
-i_* = \underset{i \in [n]}{\arg\max}
- \left( \m{e}_i^\top \m{\Phi} \m{\Gamma} \m{\Phi}^\top \m{e}_i \right)
+q_{\hat y}(\m{\hat y}) =
+ \mathcal{N}_n(\m{\Phi} \m{\mu}, \m{\Phi} \m{\Gamma} \m{\Phi}^\top)
 \end{equation}
-for observation. Ideally, this process occurs within the recycle delay of
-the experiment and adds no additional overhead to the total acquisition
-time.
+and we need only the marginal variances, i.e.~the diagonal elements
+$\Sigma_{ii} = \m{e}_i^\top \m{\Phi} \m{\Gamma} \m{\Phi}^\top \m{e}_i$
+of its covariance matrix. As derived in the \nameref{app:si}, this
+computation may take advantage of the precomputed $\m{C}$ and
+$\m{K}^{-1}$ matrices by way of the matrix inversion lemma:
+\begin{equation}
+\Sigma_{ii} \gets
+ n^{-1} {\textstyle\sum_i} \nu_i^{-1} -
+ \m{e}_i^\top \m{C}^\top \m{B}^\top \m{K}^{-1} \m{B} \m{C} \m{e}_i
+\end{equation}
+which requires only $\mathcal{O}(m^2 n)$ operations and no additional
+memory. Thus, in each iteration of ANS, we use VRLS to compute all
+marginal variances $\{\Sigma_{ii}\}_{i \in [n]}$, find the grid point
+$i_*$ having maximal marginal variance, add $i_*$ into the schedule,
+and pass $i_*$ back to the spectrometer for observation. Ideally, this
+process occurs within the recycle delay of the experiment and adds no
+additional overhead to the total acquisition time.
 
 While VRLS was derived from a probabilistic perspective, it is ultimately
 an $\ell_1$-IRLS algorithm subject to compressed sensing (CS) theory
@@ -596,9 +633,9 @@ of ``cold start'' problem: naively beginning with a single measurement
 on a large grid places VRLS outside the desirable region of its
 sparsity-undersampling phase diagram \cite{donoho:pnas2009} where
 successful reconstructions are expected. To overcome this, ANS begins
-with an initial number of measurements $m_0 > 1$ uniformly sampled
-\cite{cullen:mrc2023}, and gradually increases the size of its grid
-$n$ using a CS-inspired heuristic,
+with an initial number of measurements $m_0$ and a small initial grid
+$n_0$. As new measurements are acquired, ANS gradually increases the
+grid size $n$ using a CS-inspired heuristic,
 \begin{equation}
 \label{eq:gridsize}
 n_* = \sup\left\{
@@ -609,6 +646,20 @@ n_* = \sup\left\{
 \end{equation}
 where $\varepsilon \in (0,1)$ is a rough estimate of the sparsity of
 the signal, i.e.~the fraction of nonzero elements of $\m{x}$.
+
+% FIGURE ==========
+\begin{figure}[t]
+\centering
+\includegraphics[width=\halfsize]{figure-4.pdf}
+\caption{%
+ Representative VRLS reconstructions produced from \emph{a priori} NUS
+ and ANS simulations of signals with randomly generated parameters.
+ From front to back, traces are the noisy ground truth signal,
+ the ANS reconstruction, and a VRLS reconstruction of uniform random
+ NUS with the same acquisition budget ($m_{\max}=64$, $n_{\max}=2048$).
+}
+\label{fig:ans}
+\end{figure}
 
 % ============================================================================
 \section{Materials and methods}
@@ -646,30 +697,50 @@ ANS experiments were simulated using synthetic data generated according
 to equation \eqref{eq:truth} across a range of signal parameters
 (cf.~\nameref{app:si}). In all simulations, one hundred iterations of
 VRLS were run after each acquired time point with $\tau$ and $\xi$ fixed
-to $1/\sigma^2$. All reconstructions used a time-domain grid of 1,024
-points, and one eighth of the total acquisition budget was used to
-uniformly sample an initial set of grid points near $t=0$,
-i.e.~$m_0 = m_{\mathrm{final}}/8$
-where $m_{\mathrm{final}} = \varepsilon n_{\max}$. Runtimes and
-spectral reconstruction mean-squared errors (MSE) of the form
-\begin{equation}
-L(\m{\mu}; \m{x}) = n_{\max}^{-1} \| \m{x} - \m{\mu} \|_2^2
-\end{equation}
-were computed for each ANS experiment. For each simulated ANS experiment,
-a static NUS experiment was simulated using the same signal parameters
-and acquisition budget. For simplicity, all static NUS schedules were
-drawn from a uniform distribution over grid points.
+to $1/\sigma^2$. All experiments used $n_{\max}=2048$, corresponding to a
+time-domain grid of 1024 points, and $m_{\max}$ was set based on the
+desired undersampling rate. For simplicity, $m_0$ was initialized to
+$m_{\max}/8$ and $n_0$ to $4 m_0$, which amounts to using 12\% of the
+total acquisition budget to measure an initial uniform stretch
+\cite{cullen:mrc2023} and a modest 25\% initial undersampling rate
+as defined by $m_0 / n_0$.
 
+Paired with each ANS experiment, which produces a schedule and a
+corresponding measurement $\m{y}$ from a simulated signal, measurements
+were acquired from the same signal with the same acquisition budget using
+uniform random sampling, envelope-matched exponential random sampling
+\cite{schuyler:jbnmr2011}, and Poisson-gap sampling \cite{hyberts:jacs2010}.
+Measurements from each schedule were then reconstructed using VRLS,
+FMF-VRLS, and IST-S \cite{stern:jmr2007}. Spectral reconstruction
+mean-squared errors (MSE) of the form
+\begin{equation}
+L(\m{\hat x}; \m{x}) = n_{\max}^{-1} \| \m{x} - \m{\hat x} \|_2^2
+\end{equation}
+were computed for each combination of schedule and reconstruction algorithm.
+Mean-squared errors were computed for entire spectra as well as the spectral
+regions known to contain only signal or noise. Relative errors of the form
+\begin{equation}
+(L_{\mathrm{sched}}-L_{\mathrm{ANS}})/L_{\mathrm{sched}}
+\end{equation}
+were computed to compare errors of ANS to \emph{a priori}
+schedules for the same algorithm, and relative errors of the form
+\begin{equation}
+(L_{\mathrm{algo}}-L_{\mathrm{VRLS}})/L_{\mathrm{algo}}
+\end{equation}
+were computed to compare errors of VRLS to other
+reconstruction algorithms for the same schedule.
+
+% FIGURE ==========
 \begin{figure}[t]
 \centering
-\includegraphics[width=\halfsize]{figure-2.pdf}
+\includegraphics[width=\halfsize]{figure-5.pdf}
 \caption{%
- On-GPU runtimes of VRLS ($n_{\mathrm{iter}}=100$, black) and
- FMF-VRLS ($n_{\mathrm{iter}}=1000$, red) as a function of measurement
- count $m$, grid point count $n$, and number of parallel reconstructions
- $p$. Times are reported on a logarithmic scale.
+ Distribution of sampling schedules produced from 1000 repeated ANS
+ simulations of the same noisy signal ($\sigma=0.01$). The gap in
+ sampled grid points in the middle of the grid is a consequence of
+ the grid size heuristic, which uses power-of-two grid sizes.
 }
-\label{fig:time}
+\label{fig:sched}
 \end{figure}
 
 \subsection{Software implementation}
@@ -695,17 +766,17 @@ for ANS, and full ANS experiments were simulated in order to analyze the
 resulting schedules and determine the conditions in which successful ANS
 acquisition is feasible.
 
+% FIGURE ==========
 \begin{figure*}[h]
 \centering
-\includegraphics[width=1.0\textwidth]{figure-3.pdf}
+\includegraphics[width=1.0\textwidth]{figure-6.pdf}
 \caption{%
- Relative mean-squared error reductions
- $(L_{\mathrm{NUS}}-L_{\mathrm{ANS}})/L_{\mathrm{NUS}}$ in the
- noise-only regions of spectral reconstructions produced from
- static NUS and ANS simulations of signals with randomly
- generated parameters.
+ Mean and standard deviations ($\mu\pm 3\sigma$) of point spread
+ functions for sampling schedules produced from 1000 repeated ANS
+ simulations of the same noisy signal at (a) $\sigma=0.01$ and
+ (b) $\sigma=0.5$ arb.~units.
 }
-\label{fig:errors}
+\label{fig:psf}
 \end{figure*}
 
 % ============================================================================
@@ -735,19 +806,6 @@ Moreover, it often requires an order of magnitude more iterations than
 VRLS to converge. Figure \ref{fig:time} summarizes this effect: for
 sufficiently small $m$ (high undersampling), VRLS requires less time than
 FMF-VRLS to converge to an equivalent or better mean estimate.
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=\halfsize]{figure-4.pdf}
-\caption{%
- Representative reconstructions produced from static NUS and ANS
- simulations of signals with randomly generated parameters. From
- front to back, traces are the noisy ground truth signal, the ANS
- reconstruction, and a static NUS reconstruction with the same
- acquisition budget (12\% undersampling).
-}
-\label{fig:ans}
-\end{figure}
 
 \subsection{Active nonuniform sampling simulations}
 \label{subsec:ansresults}
@@ -796,30 +854,6 @@ effect also observed with a different variational method in
 \cite{worley:cmr2018}. The size of this effect depends on measurement
 noise, with average PSFs from ANS simulations of noisier signals
 exhibiting less pronounced, broader minima.
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=\halfsize]{figure-5.pdf}
-\caption{%
- Distribution of sampling schedules produced from 1000 repeated ANS
- simulations of the same noisy signal ($\sigma=0.01$). The gap in
- sampled grid points in the middle of the grid is a consequence of
- the grid size heuristic, which uses power-of-two grid sizes.
-}
-\label{fig:sched}
-\end{figure}
-
-\begin{figure*}[h]
-\centering
-\includegraphics[width=1.0\textwidth]{figure-6.pdf}
-\caption{%
- Mean and standard deviations ($\mu\pm 3\sigma$) of point spread
- functions for sampling schedules produced from 1000 repeated ANS
- simulations of the same noisy signal at (a) $\sigma=0.01$ and
- (b) $\sigma=0.5$ arb.~units.
-}
-\label{fig:psf}
-\end{figure*}
 
 % ============================================================================
 \section{Conclusions}
