@@ -1,5 +1,6 @@
 # .gitignore
 .DS_Store
+vrlsnmr.egg-info
 environ
 __marimo__
 *.parquet
