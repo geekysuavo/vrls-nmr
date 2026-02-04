@@ -28,27 +28,42 @@ def _(df):
 
 
 @app.cell
+def _(df):
+    df["nmse"] = df.sumsq / df.norm
+    df["rsq"] = 1 - df.nmse
+    return
+
+
+@app.cell
 def _(np, pd):
     def relative_error_by_algorithm(df: pd.DataFrame) -> pd.DataFrame:
         dfs = dict(iter(df.groupby("schedule", sort=False, group_keys=False)))
-        errors = {
-            group: group_df.error.reset_index(drop=True)
+        nmse = {
+            group: group_df.nmse.reset_index(drop=True)
             for group, group_df in dfs.items()
         }
-        error_unif = (errors["unif"] - errors["ans"]) / errors["unif"]
-        error_exp = (errors["exp"] - errors["ans"]) / errors["exp"]
-        error_pg = (errors["pg"] - errors["ans"]) / errors["pg"]
-        error_ans = error_pg * np.nan
+        delta = {
+            group: group_nmse - nmse["ans"]
+            for group, group_nmse in nmse.items()
+        }
+        error = {
+            group: (group_nmse - nmse["ans"]) / group_nmse
+            for group, group_nmse in nmse.items()
+        }
+        delta["ans"] *= np.nan
 
-        error_ans.index = dfs["ans"].index
-        error_unif.index = dfs["unif"].index
-        error_exp.index = dfs["exp"].index
-        error_pg.index = dfs["pg"].index
+        for group, group_delta in delta.items():
+            group_delta.index = dfs[group].index
+
+        for group, group_err in error.items():
+            group_err.index = dfs[group].index
 
         new_df = df.copy(deep=False)
-        error = pd.concat((error_ans, error_unif, error_exp, error_pg))
-        new_df["rel_error_by_algorithm"] = error
-        new_df["is_improved_by_algorithm"] = error.ge(0)
+        all_delta = pd.concat(delta.values())
+        all_error = pd.concat(error.values())
+        new_df["rel_error_by_algorithm"] = all_error
+        new_df["delta_nmse_by_algorithm"] = all_delta
+        new_df["is_improved_by_algorithm"] = all_delta.ge(0)
         return new_df
     return (relative_error_by_algorithm,)
 
@@ -57,22 +72,32 @@ def _(np, pd):
 def _(np, pd):
     def relative_error_by_schedule(df: pd.DataFrame) -> pd.DataFrame:
         dfs = dict(iter(df.groupby("algorithm", sort=False, group_keys=False)))
-        errors = {
-            group: group_df.error.reset_index(drop=True)
+        nmse = {
+            group: group_df.nmse.reset_index(drop=True)
             for group, group_df in dfs.items()
         }
-        error_ists = (errors["ists"] - errors["vrls"]) / errors["ists"]
-        error_fmf = (errors["fmf"] - errors["vrls"]) / errors["fmf"]
-        error_vrls = error_fmf * np.nan
+        delta = {
+            group: group_nmse - nmse["vrls"]
+            for group, group_nmse in nmse.items()
+        }
+        error = {
+            group: (group_nmse - nmse["vrls"]) / group_nmse
+            for group, group_nmse in nmse.items()
+        }
+        delta["vrls"] *= np.nan
 
-        error_vrls.index = dfs["vrls"].index
-        error_ists.index = dfs["ists"].index
-        error_fmf.index = dfs["fmf"].index
+        for group, group_delta in delta.items():
+            group_delta.index = dfs[group].index
+
+        for group, group_err in error.items():
+            group_err.index = dfs[group].index
 
         new_df = df.copy(deep=False)
-        error = pd.concat((error_vrls, error_ists, error_fmf))
-        new_df["rel_error_by_schedule"] = error
-        new_df["is_improved_by_schedule"] = error.ge(0)
+        all_delta = pd.concat(delta.values())
+        all_error = pd.concat(error.values())
+        new_df["rel_error_by_schedule"] = all_error
+        new_df["delta_nmse_by_schedule"] = all_delta
+        new_df["is_improved_by_schedule"] = all_delta.ge(0)
         return new_df
     return (relative_error_by_schedule,)
 
@@ -136,7 +161,7 @@ def _(Path, fraction_df, full_df, plt, sns):
 
     sns.barplot(
         x="sigma",
-        y="rel_error_by_algorithm",
+        y="delta_nmse_by_algorithm",
         hue="min_sparsity",
         data=full_df.query(
             "region == 'noise'"
@@ -165,11 +190,11 @@ def _(Path, fraction_df, full_df, plt, sns):
     )
 
     left.set_xlabel(r"Measurement noise ($\sigma$)")
-    left.set_ylabel("Relative error reduction")
+    left.set_ylabel(r"$\Delta$NMSE$_{noise}}$")
     left.grid(color=(0.9,) * 3)
     left.set_axisbelow(True)
     left.text(
-        0, 0.57, "(a)",
+        0, 3.7, "(a)",
         fontweight="bold",
         horizontalalignment="center",
     )
@@ -215,43 +240,69 @@ def _(Path, fraction_df, full_df, plt, sns):
 
 @app.cell
 def _(figure_path, full_df, plt, sns):
-    (_fig, (_left, _right)) = plt.subplots(nrows=1, ncols=2, figsize=(12, 4))
-
-    sns.histplot(
-        x="rel_error_by_schedule",
+    (_fig, _ax) = plt.subplots(nrows=2, ncols=2, figsize=(12, 8))
+    _kwargs = dict(
+        x="delta_nmse_by_schedule",
         hue="schedule",
         element="step",
-        data=full_df.query(
-            "region == 'noise'"
-            " and algorithm == 'ists'"
-        ),
-        ax=_left,
     )
 
     sns.histplot(
-        x="rel_error_by_schedule",
-        hue="schedule",
-        element="step",
+        **_kwargs,
+        data=full_df.query(
+            "region == 'noise'"
+            f" and algorithm == 'ists'"
+        ),
+        ax=_ax[0, 0],
+    )
+    _ax[0, 0].set_xlabel(r"$\Delta$NMSE$_{noise}$ (IST - VRLS)")
+    _ax[0, 0].grid(color=(0.9,) * 3)
+    _ax[0, 0].set_axisbelow(True)
+    _ax[0, 0].set_xlim((-5, 20))
+
+    sns.histplot(
+        **_kwargs,
         data=full_df.query(
             "region == 'signal'"
             " and algorithm == 'ists'"
         ),
-        ax=_right,
+        ax=_ax[0, 1],
         legend=False,
     )
+    _ax[0, 1].set_xlabel(r"$\Delta$NMSE$_{signal}$ (IST - VRLS)")
+    _ax[0, 1].grid(color=(0.9,) * 3)
+    _ax[0, 1].set_axisbelow(True)
+    _ax[0, 1].set_xlim((-0.5, 1))
 
-    _left.set_title("VRLS vs. IST-S / Noise region only")
-    _left.set_xlabel("Relative error reduction")
-    _left.grid(color=(0.9,) * 3)
-    _left.set_axisbelow(True)
+    sns.histplot(
+        **_kwargs,
+        data=full_df.query(
+            "region == 'noise'"
+            f" and algorithm == 'fmf'"
+        ),
+        ax=_ax[1, 0],
+        legend=False,
+    )
+    _ax[1, 0].set_xlabel(r"$\Delta$NMSE$_{noise}$ (FMF - VRLS)")
+    _ax[1, 0].grid(color=(0.9,) * 3)
+    _ax[1, 0].set_axisbelow(True)
+    _ax[1, 0].set_xlim((-5, 20))
 
-    _right.set_title("VRLS vs. IST-S / Signal region only")
-    _right.set_xlabel("Relative error reduction")
-    _right.grid(color=(0.9,) * 3)
-    _right.set_axisbelow(True)
-    _right.set_xlim((-0.8, 0.8))
+    sns.histplot(
+        **_kwargs,
+        data=full_df.query(
+            "region == 'signal'"
+            " and algorithm == 'fmf'"
+        ),
+        ax=_ax[1, 1],
+        legend=False,
+    )
+    _ax[1, 1].set_xlabel(r"$\Delta$NMSE$_{signal}$ (FMF - VRLS)")
+    _ax[1, 1].grid(color=(0.9,) * 3)
+    _ax[1, 1].set_axisbelow(True)
+    _ax[1, 1].set_xlim((-0.5, 1))
 
-    _legend = _left.get_legend()
+    _legend = _ax[0, 0].get_legend()
     _legend.set_title("Schedule")
     _legend.texts[0].set_text("ANS")
     _legend.texts[1].set_text("Uniform")
@@ -272,221 +323,104 @@ def _(figure_path, full_df, plt, sns):
 
 @app.cell
 def _(figure_path, full_df, plt, sns):
-    (_fig, (_left, _right)) = plt.subplots(nrows=1, ncols=2, figsize=(12, 4))
+    (_fig, _ax) = plt.subplots(nrows=3, ncols=2, figsize=(12, 12))
+    _kwargs = dict(
+        x="delta_nmse_by_algorithm",
+        hue="algorithm",
+        element="step",
+    )
 
     sns.histplot(
-        x="rel_error_by_schedule",
-        hue="schedule",
-        element="step",
+        **_kwargs,
         data=full_df.query(
             "region == 'noise'"
-            " and algorithm == 'fmf'"
+            f" and schedule == 'unif'"
         ),
-        ax=_left,
+        ax=_ax[0, 0],
     )
+    _ax[0, 0].set_xlabel(r"$\Delta$NMSE$_{noise}$ (Uniform - ANS)")
+    _ax[0, 0].grid(color=(0.9,) * 3)
+    _ax[0, 0].set_axisbelow(True)
+    _ax[0, 0].set_xlim((-20, 20))
 
     sns.histplot(
-        x="rel_error_by_schedule",
-        hue="schedule",
-        element="step",
+        **_kwargs,
         data=full_df.query(
             "region == 'signal'"
-            " and algorithm == 'fmf'"
+            " and schedule == 'unif'"
         ),
-        ax=_right,
+        ax=_ax[0, 1],
         legend=False,
     )
+    _ax[0, 1].set_xlabel(r"$\Delta$NMSE$_{signal}$ (Uniform - ANS)")
+    _ax[0, 1].grid(color=(0.9,) * 3)
+    _ax[0, 1].set_axisbelow(True)
+    _ax[0, 1].set_xlim((-1.25, 0.6))
 
-    _left.set_title("VRLS vs. FMF-VRLS / Noise region only")
-    _left.set_xlabel("Relative error reduction")
-    _left.grid(color=(0.9,) * 3)
-    _left.set_axisbelow(True)
+    sns.histplot(
+        **_kwargs,
+        data=full_df.query(
+            "region == 'noise'"
+            f" and schedule == 'exp'"
+        ),
+        ax=_ax[1, 0],
+        legend=False,
+    )
+    _ax[1, 0].set_xlabel(r"$\Delta$NMSE$_{noise}$ (Exponential - ANS)")
+    _ax[1, 0].grid(color=(0.9,) * 3)
+    _ax[1, 0].set_axisbelow(True)
+    _ax[1, 0].set_xlim((-20, 20))
 
-    _right.set_title("VRLS vs. FMF-VRLS / Signal region only")
-    _right.set_xlabel("Relative error reduction")
-    _right.grid(color=(0.9,) * 3)
-    _right.set_axisbelow(True)
-    _right.set_xlim((-1, 1))
+    sns.histplot(
+        **_kwargs,
+        data=full_df.query(
+            "region == 'signal'"
+            " and schedule == 'exp'"
+        ),
+        ax=_ax[1, 1],
+        legend=False,
+    )
+    _ax[1, 1].set_xlabel(r"$\Delta$NMSE$_{signal}$ (Exponential - ANS)")
+    _ax[1, 1].grid(color=(0.9,) * 3)
+    _ax[1, 1].set_axisbelow(True)
+    _ax[1, 1].set_xlim((-1.25, 0.6))
 
-    _legend = _left.get_legend()
-    _legend.set_title("Schedule")
-    _legend.texts[0].set_text("ANS")
-    _legend.texts[1].set_text("Uniform")
-    _legend.texts[2].set_text("Exponential")
-    _legend.texts[3].set_text("Poisson-gap")
+    sns.histplot(
+        **_kwargs,
+        data=full_df.query(
+            "region == 'noise'"
+            f" and schedule == 'pg'"
+        ),
+        ax=_ax[2, 0],
+        legend=False,
+    )
+    _ax[2, 0].set_xlabel(r"$\Delta$NMSE$_{noise}$ (Poisson-gap - ANS)")
+    _ax[2, 0].grid(color=(0.9,) * 3)
+    _ax[2, 0].set_axisbelow(True)
+    _ax[2, 0].set_xlim((-20, 20))
+
+    sns.histplot(
+        **_kwargs,
+        data=full_df.query(
+            "region == 'signal'"
+            " and schedule == 'pg'"
+        ),
+        ax=_ax[2, 1],
+        legend=False,
+    )
+    _ax[2, 1].set_xlabel(r"$\Delta$NMSE$_{signal}$ (Poisson-gap - ANS)")
+    _ax[2, 1].grid(color=(0.9,) * 3)
+    _ax[2, 1].set_axisbelow(True)
+    _ax[2, 1].set_xlim((-1.25, 0.6))
+
+    _legend = _ax[0, 0].get_legend()
+    _legend.set_title("Algorithm")
+    _legend.texts[0].set_text("VRLS")
+    _legend.texts[1].set_text("FMF-VRLS")
+    _legend.texts[2].set_text("IST-S")
 
     plt.savefig(
         figure_path.parent / "figure-s2.pdf",
-        format="pdf",
-        dpi=600,
-        pad_inches=0,
-        bbox_inches="tight",
-    )
-
-    _fig
-    return
-
-
-@app.cell
-def _(figure_path, full_df, plt, sns):
-    (_fig, (_left, _right)) = plt.subplots(nrows=1, ncols=2, figsize=(12, 4))
-
-    sns.histplot(
-        x="rel_error_by_algorithm",
-        hue="algorithm",
-        element="step",
-        data=full_df.query(
-            "region == 'noise'"
-            " and schedule == 'unif'"
-        ),
-        ax=_left,
-    )
-
-    sns.histplot(
-        x="rel_error_by_algorithm",
-        hue="algorithm",
-        element="step",
-        data=full_df.query(
-            "region == 'signal'"
-            " and schedule == 'unif'"
-        ),
-        ax=_right,
-        legend=False,
-    )
-
-    _left.set_title("ANS vs. Uniform / Noise region only")
-    _left.set_xlabel("Relative error reduction")
-    _left.grid(color=(0.9,) * 3)
-    _left.set_axisbelow(True)
-
-    _right.set_title("ANS vs. Uniform / Signal region only")
-    _right.set_xlabel("Relative error reduction")
-    _right.grid(color=(0.9,) * 3)
-    _right.set_axisbelow(True)
-    #_right.set_xlim((-1, 1))
-
-    _legend = _left.get_legend()
-    _legend.set_title("Algorithm")
-    _legend.texts[0].set_text("VRLS")
-    _legend.texts[1].set_text("FMF-VRLS")
-    _legend.texts[2].set_text("IST-S")
-
-    plt.savefig(
-        figure_path.parent / "figure-s3.pdf",
-        format="pdf",
-        dpi=600,
-        pad_inches=0,
-        bbox_inches="tight",
-    )
-
-    _fig
-    return
-
-
-@app.cell
-def _(figure_path, full_df, plt, sns):
-    (_fig, (_left, _right)) = plt.subplots(nrows=1, ncols=2, figsize=(12, 4))
-
-    sns.histplot(
-        x="rel_error_by_algorithm",
-        hue="algorithm",
-        element="step",
-        data=full_df.query(
-            "region == 'noise'"
-            " and schedule == 'exp'"
-        ),
-        ax=_left,
-    )
-
-    sns.histplot(
-        x="rel_error_by_algorithm",
-        hue="algorithm",
-        element="step",
-        data=full_df.query(
-            "region == 'signal'"
-            " and schedule == 'exp'"
-        ),
-        ax=_right,
-        legend=False,
-    )
-
-    _left.set_title("ANS vs. Exponential / Noise region only")
-    _left.set_xlabel("Relative error reduction")
-    _left.grid(color=(0.9,) * 3)
-    _left.set_axisbelow(True)
-    _left.set_xlim((-15, 1))
-
-    _right.set_title("ANS vs. Exponential / Signal region only")
-    _right.set_xlabel("Relative error reduction")
-    _right.grid(color=(0.9,) * 3)
-    _right.set_axisbelow(True)
-    #_right.set_xlim((-1, 1))
-
-    _legend = _left.get_legend()
-    _legend.set_title("Algorithm")
-    _legend.texts[0].set_text("VRLS")
-    _legend.texts[1].set_text("FMF-VRLS")
-    _legend.texts[2].set_text("IST-S")
-
-    plt.savefig(
-        figure_path.parent / "figure-s4.pdf",
-        format="pdf",
-        dpi=600,
-        pad_inches=0,
-        bbox_inches="tight",
-    )
-
-    _fig
-    return
-
-
-@app.cell
-def _(figure_path, full_df, plt, sns):
-    (_fig, (_left, _right)) = plt.subplots(nrows=1, ncols=2, figsize=(12, 4))
-
-    sns.histplot(
-        x="rel_error_by_algorithm",
-        hue="algorithm",
-        element="step",
-        data=full_df.query(
-            "region == 'noise'"
-            " and schedule == 'pg'"
-        ),
-        ax=_left,
-    )
-
-    sns.histplot(
-        x="rel_error_by_algorithm",
-        hue="algorithm",
-        element="step",
-        data=full_df.query(
-            "region == 'signal'"
-            " and schedule == 'pg'"
-        ),
-        ax=_right,
-        legend=False,
-    )
-
-    _left.set_title("ANS vs. Poisson-gap / Noise region only")
-    _left.set_xlabel("Relative error reduction")
-    _left.grid(color=(0.9,) * 3)
-    _left.set_axisbelow(True)
-    _left.set_xlim((-20, 1))
-
-    _right.set_title("ANS vs. Poisson-gap / Signal region only")
-    _right.set_xlabel("Relative error reduction")
-    _right.grid(color=(0.9,) * 3)
-    _right.set_axisbelow(True)
-    _right.set_xlim((-2, 0.5))
-
-    _legend = _left.get_legend()
-    _legend.set_title("Algorithm")
-    _legend.texts[0].set_text("VRLS")
-    _legend.texts[1].set_text("FMF-VRLS")
-    _legend.texts[2].set_text("IST-S")
-
-    plt.savefig(
-        figure_path.parent / "figure-s5.pdf",
         format="pdf",
         dpi=600,
         pad_inches=0,

@@ -82,7 +82,7 @@ def _(Path, plt, sigma, x, x_meas, y, y_meas):
     bottom.set_ylabel("Signal (imaginary)")
     bottom.grid(color=(0.9,) * 3)
 
-    figure_path = Path.cwd() / "figures" / "figure-s6.pdf"
+    figure_path = Path.cwd() / "figures" / "figure-s3.pdf"
     figure_path.parent.mkdir(exist_ok=True)
     plt.savefig(
         figure_path,
