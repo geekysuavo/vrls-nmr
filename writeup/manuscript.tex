@@ -151,16 +151,16 @@ The proposed algorithms strongly connect with a broad array of existing
 reconstruction methods, making an initial exposition of relevant theory
 necessary.
 
-This section begins by reintroducing \emph{iteratively
-reweighted least squares} (IRLS) as a classical method for solving sparse
-recovery problems in compressed sensing. The machinery of Bayesian inference
-is then brought to bear in order to demonstrate that IRLS naturally arises
-as the \emph{maximum a posteriori} (MAP) estimator of a particular
-probability distribution. The additional machinery of variational
-approximation is then employed to construct \emph{variationally reweighted
-least squares} (VRLS), which is functionally similar to IRLS but yields
-posterior mean and variance estimates. Finally, ANS is developed around
-VRLS.
+This section begins by reintroducing \emph{iteratively reweighted least
+squares} (IRLS, \cite{daubechies:cpam2010,kazimierczuk:jmr2011}) as a
+classical method for solving sparse recovery problems in compressed sensing.
+The machinery of Bayesian inference is then brought to bear in order to
+demonstrate that IRLS naturally arises as the \emph{maximum a posteriori}
+(MAP) estimator of a particular probability distribution. The additional
+machinery of variational approximation is then employed to construct
+\emph{variationally reweighted least squares} (VRLS), which is functionally
+similar to IRLS but yields posterior mean and variance estimates.
+Finally, ANS is developed around VRLS.
 
 % FIGURE ==========
 \begin{figure*}[t]
@@ -300,15 +300,15 @@ approximating the $\ell_1$ norm by a quadratic function, i.e.:
 where $\m{z}$ is the point around which the approximation is made,
 $\m{W}$ is a diagonal matrix containing the weights $1 / |z_i|$.
 Substituting this local approximation back into e.g.~\eqref{eq:l1}
-results in a simple minimization algorithm composed of two steps per
-iteration:
+results in a simple minimization algorithm (IRLS) composed of two
+steps per iteration:
 \begin{enumerate}
- \item $\m{x} \gets \m{W}^{-1} \m{A}^\top
-        \left( \m{A} \m{W}^{-1} \m{A}^\top \right)^{-1} \m{y}$
- \item $\forall i : W_{ii} \gets |x_i|^{-1}$
+ \item \emph{(Least Squares)}
+  $\m{x} \gets \m{W}^{-1} \m{A}^\top
+  \left( \m{A} \m{W}^{-1} \m{A}^\top \right)^{-1} \m{y}$
+ \item \emph{(Reweighting)}
+  $\forall i : W_{ii} \gets |x_i|^{-1}$
 \end{enumerate}
-which is a form of \emph{iteratively reweighted least squares}
-(IRLS, \cite{daubechies:cpam2010,kazimierczuk:jmr2011}).
 
 One particularly serious flaw exists in the above algorithm: if any
 $x_i \to 0$, as is often the case in sparse recovery, its accompanying
@@ -433,9 +433,12 @@ $q(\m{x}, \m{w})$. To achieve this, we restrict $q$ to the family of
 distributions that factorize as follows,
 \begin{equation}
 \label{eq:family}
-\mathcal{Q} = \{ q : q(\m{x}, \m{w}) = q_x(\m{x}) \, q_w(\m{w}) \}
+\mathcal{Q} = \{
+ q \in \mathcal{Q}_0 \mid q(\m{x}, \m{w}) = q_x(\m{x}) \, q_w(\m{w})
+\}
 \end{equation}
-
+where $\mathcal{Q}_0$ denotes the set of all possible distributions,
+i.e.~positive functions of $\m{x}$ and $\m{w}$ that integrate to one.
 Given a choice of variational family $\mathcal{Q}$, we find the exact
 form of $q$ by minimizing the variational free energy functional,
 \begin{equation}
@@ -553,8 +556,8 @@ ANS algorithm that uses VRLS as a subroutine.
 \centering
 \includegraphics[width=1.0\textwidth]{figure-3.pdf}
 \caption{%
- (a) Relative mean-squared error reductions
- $(L_{\mathrm{unif}}-L_{\mathrm{ANS}})/L_{\mathrm{unif}}$ in the
+ (a) Normalized mean-squared error reductions
+ $\Delta E_{\mathrm{unif,VRLS}}^{\mathrm{ANS}}$ in the
  noise-only regions of VRLS reconstructions produced by uniform
  random NUS and ANS. (b) Fraction of Monte Carlo trials in which
  ANS had lower VRLS reconstruction errors than another \emph{a priori}
@@ -571,10 +574,15 @@ is intentional in VRLS. A crucial component of ANS is the posterior
 predictive covariance matrix of the complete time-domain signal
 $\m{\hat y} = \m{\Phi} \m{x}$, which is equal to
 $\m{\Phi} \m{\Gamma} \m{\Phi}^\top$. Had we instead restricted $q$ to
-a fully factorized \emph{mean-field} family,
+a fully factorized \emph{mean-field} family,\footnote{%
+ Note that $\mathcal{Q}_{\mathrm{MF}}$ is more restrictive than $\mathcal{Q}$,
+ i.e.~$\mathcal{Q}_0 \supset \mathcal{Q} \supset \mathcal{Q}_{\mathrm{MF}}$.
+}
 \begin{equation}
-\mathcal{Q}_{\mathrm{MF}} =
- \{ q : q(\m{x}, \m{w}) = {\textstyle\prod_i} q_x(x_i) \, q_w(w_i) \}
+\mathcal{Q}_{\mathrm{MF}} = \{
+ q \in \mathcal{Q}_0 \mid
+ q(\m{x}, \m{w}) = {\textstyle\prod_i} q_x(x_i) \, q_w(w_i)
+\}
 \end{equation}
 the frequency-domain covariance matrix $\m{\Gamma}$ would become diagonal,
 and the time-domain covariance matrix  $\m{\Phi} \m{\Gamma} \m{\Phi}^\top$
@@ -653,7 +661,7 @@ the signal, i.e.~the fraction of nonzero elements of $\m{x}$.
 \includegraphics[width=\halfsize]{figure-4.pdf}
 \caption{%
  Representative VRLS reconstructions produced from \emph{a priori} NUS
- and ANS simulations of signals with randomly generated parameters.
+ and ANS simulations of the same signal.
  From front to back, traces are the noisy ground truth signal,
  the ANS reconstruction, and a VRLS reconstruction of uniform random
  NUS with the same acquisition budget ($m_{\max}=64$, $n_{\max}=2048$).
@@ -711,24 +719,33 @@ were acquired from the same signal with the same acquisition budget using
 uniform random sampling, envelope-matched exponential random sampling
 \cite{schuyler:jbnmr2011}, and Poisson-gap sampling \cite{hyberts:jacs2010}.
 Measurements from each schedule were then reconstructed using VRLS,
-FMF-VRLS, and IST-S \cite{stern:jmr2007}. Spectral reconstruction
-mean-squared errors (MSE) of the form
+FMF-VRLS, and IST-S \cite{stern:jmr2007}. Normalized mean squared errors
+(NMSE) of the form,
 \begin{equation}
-L(\m{\hat x}; \m{x}) = n_{\max}^{-1} \| \m{x} - \m{\hat x} \|_2^2
+E(\m{x}, \m{\hat x}) =
+ \frac{\| \m{x} - \m{\hat x} \|_2^2}{\| \m{x} \|_2^2}
 \end{equation}
-were computed for each combination of schedule and reconstruction algorithm.
-Mean-squared errors were computed for entire spectra as well as the spectral
-regions known to contain only signal or noise. Relative errors of the form
+where $\m{x}$ denotes the ground truth spectrum and $\m{\hat x}$ denotes
+the spectral estimate, were computed for each combination of schedule and
+reconstruction algorithm. NMSE values were computed for entire spectra as
+well as the spectral regions known to contain only signal or noise.
+Error differences ($\Delta$NMSE) of the form
 \begin{equation}
-(L_{\mathrm{sched}}-L_{\mathrm{ANS}})/L_{\mathrm{sched}}
+\Delta E_{\mathrm{sched,algo}}^{\mathrm{ANS}} =
+ E(\m{x}, \m{\hat x}_{\mathrm{sched,algo}}) -
+ E(\m{x}, \m{\hat x}_{\mathrm{ANS,algo}})
 \end{equation}
-were computed to compare errors of ANS to \emph{a priori}
+were computed to compare errors of ANS to errors of \emph{a priori}
 schedules for the same algorithm, and relative errors of the form
 \begin{equation}
-(L_{\mathrm{algo}}-L_{\mathrm{VRLS}})/L_{\mathrm{algo}}
+\Delta E_{\mathrm{sched,algo}}^{\mathrm{VRLS}} =
+ E(\m{x}, \m{\hat x}_{\mathrm{sched,algo}}) -
+ E(\m{x}, \m{\hat x}_{\mathrm{sched,VRLS}})
 \end{equation}
-were computed to compare errors of VRLS to other
-reconstruction algorithms for the same schedule.
+were computed to compare errors of VRLS to errors of other
+reconstruction algorithms for the same schedule. For IST-S, $\m{\hat x}$
+is the point estimate, essentially $\m{\hat x}_{\mathrm{MAP}}$. For VRLS
+and FMF-VRLS, $\m{\hat x}$ is the mean estimate $\m{\mu}$.
 
 % FIGURE ==========
 \begin{figure}[t]
@@ -795,48 +812,58 @@ tend to under-estimate the true posterior variances
 \cite{wainwright:ftml2008}. Nevertheless, they are useful for
 distinguishing truly recovered signals from artifacts.
 
-When posterior variance estimates are not required, fast mean-field
-(FMF) VRLS can provide mean estimates $\m{\mu}$ of equal quality to
-VRLS without requiring the storage or inversion of matrices. However,
-the matrix-free advantage of FMF-VRLS comes with disadvantages. Because
-FMF-VRLS neglects posterior correlations between spectral points, it
-dramatically under-estimates frequency domain posterior variance,
-and completely fails to usefully estimate time-domain posterior variance.
-Moreover, it often requires an order of magnitude more iterations than
-VRLS to converge. Figure \ref{fig:time} summarizes this effect: for
-sufficiently small $m$ (high undersampling), VRLS requires less time than
-FMF-VRLS to converge to an equivalent or better mean estimate.
+When posterior variance estimates are not required, FMF-VRLS can provide
+mean estimates $\m{\mu}$ of equal quality to VRLS without requiring the
+storage or inversion of matrices. However, the matrix-free advantage of
+FMF-VRLS comes with disadvantages. Because FMF-VRLS neglects posterior
+correlations between spectral points, it dramatically under-estimates
+frequency domain posterior variance, and completely fails to usefully
+estimate time-domain posterior variance. Moreover, it often requires an
+order of magnitude more iterations than VRLS to converge.
+Figure \ref{fig:time} summarizes this effect: for sufficiently small
+$m$ (high undersampling), VRLS requires less time than FMF-VRLS to
+converge to an equivalent or better mean estimate.
 
 \subsection{Active nonuniform sampling simulations}
 \label{subsec:ansresults}
-Comparing the reconstruction mean-squared errors $L(\m{\mu}; \m{x})$
-from ANS and static NUS surprisingly reveals equivalent performance.
-However, comparing their reconstruction errors in near-resonance and
-noise-only spectral regions shows diverging behaviors
-(Figures \ref{fig:errors}, \ref{fig:ans}). Near true resonances, ANS
-errors are the same or slightly increased relative to static NUS,
+Comparing the VRLS NMSE distributions from ANS and \emph{a priori} NUS
+schedules reveals largely equivalent performance in the aggregate: all
+reconstructions have NMSE less than one, indicating reasonably good fits.
+Overall, uniform and exponential schedules have lower signal-region NMSE,
+whereas ANS and Poisson-gap schedules have lower noise-region NMSE.
+
+Additional insights are gained by examining distributions of $\Delta$NMSE
+values where the only difference is the sampling schedule (Figures
+\ref{fig:errors}, \ref{fig:ans}). The degree to which ANS reduces VRLS
+reconstruction error in noise-only spectral regions, relative to uniform
+\emph{a priori} NUS, is dependent on the measurement noise $\sigma$ and
+the final undersampling rate $m/n$ (Figure \ref{fig:errors}a). This
+dependence is most apparent when comparing ANS to uniform NUS schedules,
+but can be observed to varynig degree in envelope-matched exponential
+schedules and Poisson-gap schedules (Figure \ref{fig:errors}b). When
+acquiring noisier data, the information gained for each new grid point
+is lower, reducing the advantage of ANS. Likewise, in less aggressively
+undersampled experiments, the variability of reconstructions due to the
+choice of schedule is diminished. By leveraging the uncertainty estimates
+and variational free energies computed by VRLS to form an early stopping
+criterion, we may therefore limit ANS to this ideal undersampling regime
+of $m \ll n$ while controlling reconstruction error. Detailed histograms
+of $\Delta$NMSE are shown in Figures S1 in the \nameref{app:si}.
+
+To illustrate a concrete result from the Figure \ref{fig:errors}a metrics,
+Figure \ref{fig:ans} compares VRLS reconstructions of the same signal
+using ANS and uniform \emph{a priori} NUS. Near true resonances, ANS
+errors are the same or slightly increased relative to \emph{a priori} NUS,
 suggesting a tendency of ANS to concentrate any artifacts it produces
 around real spectral content. In noise-only regions, ANS errors are
-dramatically reduced relative to static NUS, which tends to produce
+dramatically reduced relative to \emph{a priori} NUS, which tends to produce
 sharper artifacts more randomly within the spectral window. These trends
-are mirrored in the posterior variance estimates from ANS and static NUS,
-demonstrating that ANS preferentially selects grid points that inform
-VRLS about where the signal \emph{is not present} in the spectrum, as
-opposed to where it is. Viewed from the lens of solving the highly
-underdetermined linear system \eqref{eq:signalmodel}, such a
+are mirrored in the posterior variance estimates from ANS and
+\emph{a priori} NUS, demonstrating that ANS preferentially selects
+grid points that inform VRLS about where the signal \emph{is not present}
+in the spectrum, as opposed to where it is. Viewed from the lens of solving
+the highly underdetermined linear system \eqref{eq:signalmodel}, such a
 ``process of elimination'' is not an altogether unreasonable strategy.
-
-Perhaps less surprisingly, the degree to which ANS reduces the error
-of noise-only spectral regions, relative to static NUS, depends on
-the measurement noise $\sigma$ and the final undersampling rate $m/n$
-(Figure \ref{fig:errors}). When acquiring noisy data, the information
-gained for each new grid point is lower, reducing the advantage of ANS.
-Likewise, in less aggressively undersampled experiments, the variability
-of reconstructions due to the choice of schedule is diminished. By
-leveraging the uncertainty estimates and variational free energies
-computed by VRLS to form an early stopping criterion, we may therefore
-limit ANS to this ideal undersampling regime of $m \ll n$ while
-controlling reconstruction error.
 
 Repeated simulations of ANS using the same ground truth signal with
 different samples of noise $\epsilon$ show that resulting schedules
@@ -853,7 +880,21 @@ minimizes the PSF of its schedules in a data-dependent manner, an
 effect also observed with a different variational method in
 \cite{worley:cmr2018}. The size of this effect depends on measurement
 noise, with average PSFs from ANS simulations of noisier signals
-exhibiting less pronounced, broader minima.
+exhibiting less pronounced, broader minima. Figure S3 in the
+\nameref{app:si} highlights a single representative ANS result for the
+same signal used for Figures \ref{fig:sched} and \ref{fig:psf}.
+
+Finally, it is important to note that the schedules produced by ANS are
+less ``universal'' than other \emph{a priori} sampling schedules, as they
+have been specifically selected to reduce VRLS uncertainty. As a consequence,
+improvements in reconstruction quality are not guaranteed when a different
+reconstruction algorithm is applied to the same data. Figure S2 in the
+\nameref{app:si} illustrates this behavior for FMF-VRLS and IST-S. This
+increased ``brittleness'' was also observed in the case of beat-matched NUS
+\cite{schuyler:jbnmr2011}, although for slightly different reasons. Further
+analysis is needed to understand whether this observation also applies to
+ANS data reconstructed using inferred-basis signal models that have fewer
+degrees of freedom than fixed-basis models like IRLS and IST.
 
 % ============================================================================
 \section{Conclusions}
@@ -876,11 +917,15 @@ Certain characteristics of ANS still warrant further examination.
 For example, refinement of the grid size heuristic \eqref{eq:gridsize}
 could nudge the algorithm towards producing sampling schedules with more
 homogenous time-domain coverage, even though it remains to be seen whether
-this is more than an aesthetic trait. Perhaps most obviously, further work
-is needed to extend VRLS to multidimensional data where the advantages of
-NUS are greater. Doing so is largely an engineering exercise that will
-require careful indexing and multi-complex FFTs, as nothing in VRLS
-precludes its generalization to higher dimensionalities.
+this is more than an aesthetic trait. In addition, while expected
+information gain is a common utility function in active learning,
+other utility functions may usefully bias ANS towards acquiring better
+data in specific cases like low signal-to-noise or high dynamic range.
+Perhaps most obviously, further work is needed to extend VRLS to
+multidimensional data where the advantages of NUS are greater. Doing so
+is largely an engineering exercise that will require careful indexing
+and multi-complex FFTs, as nothing in VRLS precludes its generalization
+to higher dimensionalities.
 
 To the author's knowledge, VRLS is the first algorithm to satisfy the
 desiderata of ANS and consequently enable time-efficient model-based
@@ -902,11 +947,12 @@ experimental parameters, the number of resonances and their relationships
 in protein samples, or the contributions of possible analytes in complex
 mixtures, are all prime candidates for Bayesian modeling. While such
 parametric signal models are currently too slow for ANS, they promise
-the dual advantages of (i) further reducing acquisition time by leveraging
-prior information and (ii) providing spectroscopists with richer and more
-immediate experimental results. Indeed, further work is needed to develop
-Bayesian NMR signal models that make full use of available prior knowledge
-while also admitting active learning.
+the advantages of (i) further reducing acquisition time by leveraging
+prior information, (ii) reducing the number of uncertain degrees of freedom
+and (iii) providing spectroscopists with richer and more immediate
+experimental results. Indeed, further work is needed to develop Bayesian
+NMR signal models that make full use of available prior knowledge while
+also admitting active learning.
 
 % ============================================================================
 \appendix

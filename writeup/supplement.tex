@@ -664,20 +664,22 @@ in ANS simulations,
 \end{tabular}
 \end{table}
 
+The number of Monte Carlo samples was set to 100, 50, and 10 for
+$\lfloor m/n \rfloor$ values of 0.05, 0.1, and 0.2, respectively,
+resulting in $3^3 (100+50+10) = 4320$ samples.
+
 
 % ==================================================================s===========
 \clearpage
-\subsection{Reconstruction errors by schedule}
-The following figures compare VRLS reconstruction errors to IST-S and FMF-VRLS
-reconstruction errors for various selections of schedules. Positive values
-indicate that VRLS has lower error.
+\subsection{Reconstruction errors by schedule and algorithm}
 
 \begin{figure*}[h]
 \centering
 \makebox[\textwidth]{%
 \includegraphics[width=1.4\textwidth]{figure-s1.pdf}}
 \caption{%
- Matched-schedule relative errors, VRLS rel.~IST-S.
+ Matched-schedule error improvements from VRLS.
+ Positive values indicate that VRLS has lower error on the same schedule.
 }
 \end{figure*}
 
@@ -686,42 +688,8 @@ indicate that VRLS has lower error.
 \makebox[\textwidth]{%
 \includegraphics[width=1.4\textwidth]{figure-s2.pdf}}
 \caption{%
- Matched-schedule relative errors, VRLS rel.~FMF-VRLS.
-}
-\end{figure*}
-
-
-% =============================================================================
-\clearpage
-\subsection{Reconstruction errors by algorithm}
-The following figures compare reconstruction errors for ANS schedules to
-those for other schedules for each reconstruction algorithm. Positive values
-indicate that ANS has lower error.
-
-\begin{figure*}[h]
-\centering
-\makebox[\textwidth]{%
-\includegraphics[width=1.4\textwidth]{figure-s3.pdf}}
-\caption{%
- Matched-algorithm relative errors, ANS rel.~Uniform.
-}
-\end{figure*}
-
-\begin{figure*}[h]
-\centering
-\makebox[\textwidth]{%
-\includegraphics[width=1.4\textwidth]{figure-s4.pdf}}
-\caption{%
- Matched-algorithm relative errors, ANS rel.~Exponential.
-}
-\end{figure*}
-
-\begin{figure*}[h]
-\centering
-\makebox[\textwidth]{%
-\includegraphics[width=1.4\textwidth]{figure-s5.pdf}}
-\caption{%
- Matched-algorithm relative errors, ANS rel.~Poisson-gap.
+ Matched-algorithm error improvements from ANS.
+ Positive values indicate that ANS has lower error with the same algorithm.
 }
 \end{figure*}
 
@@ -733,7 +701,7 @@ indicate that ANS has lower error.
 \begin{figure*}[h]
 \centering
 \makebox[\textwidth]{%
-\includegraphics[width=1.4\textwidth]{figure-s6.pdf}}
+\includegraphics[width=1.4\textwidth]{figure-s3.pdf}}
 \caption{%
  Single schedule and measurement produced by ANS acquisition of the
  signal used to construct Figures 5 and 6 in the manuscript. ANS parameters

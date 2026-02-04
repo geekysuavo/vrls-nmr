@@ -46,8 +46,8 @@ def _(operator, reduce):
     ampl_dof_values = (1, 10, 50,)
     sparsity_values = (  # sparsity-dependent num_replicas
         (0.05,) * 100 +
-        (0.1,) * 25 +
-        (0.2,) * 5
+        (0.1,) * 50 +
+        (0.2,) * 10
     )
 
     space_names = (
