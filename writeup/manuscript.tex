@@ -255,7 +255,7 @@ inequality-constrained problem,
 \begin{equation}
 \begin{aligned}
  \underset{\m{x}}{\text{minimize}} &\; \|\m{x}\|_1 \\
- \text{such that} &\; \| \m{y} - \m{A} \m{x} \|_2^2 \le m \sigma
+ \text{such that} &\; \| \m{y} - \m{A} \m{x} \|_2^2 \le m \sigma^2
 \end{aligned}
 \label{eq:l1_ineq}
 \end{equation}
@@ -523,11 +523,11 @@ update becomes,
 \m{\mu} \gets \m{V}^{-1} \m{A}^\top \m{K}^{-1} \m{y}
 \end{equation}
 which no longer requires the full covariance matrix $\m{\Gamma}$. In fact,
-the updates to $\m{\nu}$ only require the diagonal elements of $\m{\Gamma}$,
+the updates to $\m{\nu}$ only require the diagonal entries of $\m{\Gamma}$,
 and the posterior predictive variances of $\m{\hat y}$ only require the
-diagonal elements of $\m{\Phi} \m{\Gamma} \m{\Phi}^\top$. Both of these
+diagonal entries of $\m{\Phi} \m{\Gamma} \m{\Phi}^\top$. Both of these
 benefit from kernelization, requiring only $\mathcal{O}(m^2 n)$ operations.
-For example, any diagonal element $\Gamma_{ii}$ may be computed using the
+For example, any diagonal entry $\Gamma_{ii}$ may be computed using the
 matrix inversion lemma,
 \begin{equation}
 \label{eq:gamma_update}
@@ -616,7 +616,7 @@ $\m{\hat y} = \m{\Phi} \m{x}$ is also normally distributed,
 q_{\hat y}(\m{\hat y}) =
  \mathcal{N}_n(\m{\Phi} \m{\mu}, \m{\Phi} \m{\Gamma} \m{\Phi}^\top)
 \end{equation}
-and we need only the marginal variances, i.e.~the diagonal elements
+and we need only the marginal variances, i.e.~the diagonal entries
 $\Sigma_{ii} = \m{e}_i^\top \m{\Phi} \m{\Gamma} \m{\Phi}^\top \m{e}_i$
 of its covariance matrix. As derived in the \nameref{app:si}, this
 computation may take advantage of the precomputed $\m{C}$ and
@@ -890,7 +890,7 @@ have been specifically selected to reduce VRLS uncertainty. As a consequence,
 improvements in reconstruction quality are not guaranteed when a different
 reconstruction algorithm is applied to the same data. Figure S2 in the
 \nameref{app:si} illustrates this behavior for FMF-VRLS and IST-S. This
-increased ``brittleness'' was also observed in the case of beat-matched NUS
+decreased robustness was also observed in the case of beat-matched NUS
 \cite{schuyler:jbnmr2011}, although for slightly different reasons. Further
 analysis is needed to understand whether this observation also applies to
 ANS data reconstructed using inferred-basis signal models that have fewer

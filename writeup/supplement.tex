@@ -625,12 +625,12 @@ the following distributions:
 \begin{aligned}
 \omega_c &\sim \mathcal{U}(-\tfrac{1}{2}, \tfrac{1}{2})
 \\
-\rho_c &\sim
- \delta_\rho^{-1} \sum_{r=1}^{\delta_\rho} Z_r^2,
+\rho_c &\gets
+ \bar\rho \, \delta_\rho^{-1} \sum_{r=1}^{\delta_\rho} Z_r^2,
  \quad\text{where } Z_r \sim \mathcal{N}(0, 1)
 \\
-\alpha_c &\sim
- \delta_\alpha^{-1} \sum_{r=1}^{\delta_\alpha} Z_r^2,
+\alpha_c &\gets
+ \bar\alpha \, \delta_\alpha^{-1} \sum_{r=1}^{\delta_\alpha} Z_r^2,
  \quad\text{where } Z_r \sim \mathcal{N}(0, 1)
 \\
 \theta_c &\sim \mathcal{N}(0, s_\theta^2)
@@ -669,7 +669,7 @@ $\lfloor m/n \rfloor$ values of 0.05, 0.1, and 0.2, respectively,
 resulting in $3^3 (100+50+10) = 4320$ samples.
 
 
-% ==================================================================s===========
+% =============================================================================
 \clearpage
 \subsection{Reconstruction errors by schedule and algorithm}
 
@@ -704,9 +704,11 @@ resulting in $3^3 (100+50+10) = 4320$ samples.
 \includegraphics[width=1.4\textwidth]{figure-s3.pdf}}
 \caption{%
  Single schedule and measurement produced by ANS acquisition of the
- signal used to construct Figures 5 and 6 in the manuscript. ANS parameters
- were $m_0=8$, $n_0=32$, $m_{\max}=64$, $n_{\max}=2048$, and
- $\sigma=0.1$ arb.~units.
+ signal used to construct Figures 5 and 6 in the manuscript.
+ Colored traces indicate VRLS estimates $\hat{y}_i \pm \sqrt{\Sigma_{ii}}$
+ and grey dashed lines indicate the ground truth signal.
+ ANS parameters were $m_0=8$, $n_0=32$, $m_{\max}=64$, $n_{\max}=2048$,
+ and $\sigma=0.1$ arb.~units.
 }
 \end{figure*}
 
