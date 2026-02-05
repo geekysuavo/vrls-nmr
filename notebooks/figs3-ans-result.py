@@ -31,13 +31,13 @@ def _(Signal, torch):
 
 
 @app.cell
-def _(algo, ground_truth, partial):
+def _(algo, ground_truth, partial, torch):
     sigma = 0.1
     niter = 100
     n = 2048
     m = 64
 
-    (_, ids, *_) = algo.ans(
+    (yobs, xobs, _, _, yhat, yvar) = algo.ans(
         model=algo.vrls,
         measure=partial(ground_truth, noise=sigma),
         m_initial=8,
@@ -49,35 +49,43 @@ def _(algo, ground_truth, partial):
         xi=1 / sigma**2,
         niter=niter,
     )
-    return ids, sigma
 
+    xobs = xobs.cpu()
+    yobs = yobs.cpu()
+    yhat = yhat.squeeze(dim=0).cpu()
+    yvar = yvar.squeeze(dim=0).cpu()
 
-@app.cell
-def _(ground_truth, ids, sigma, torch):
-    n_td = 512
-
+    n_td = yhat.size(dim=0)
     x = torch.arange(n_td)
-    y = ground_truth(x.cuda()).cpu()
-
-    x_meas = ids.cpu()
-    y_meas = ground_truth(ids, noise=sigma).cpu()
-    return x, x_meas, y, y_meas
+    y0 = ground_truth(x.cuda()).cpu()
+    return x, xobs, y0, yhat, yobs, yvar
 
 
 @app.cell
-def _(Path, plt, sigma, x, x_meas, y, y_meas):
+def _(Path, plt, x, xobs, y0, yhat, yobs, yvar):
     (fig, (top, bottom)) = plt.subplots(nrows=2, ncols=1, figsize=(10, 6))
 
-    top.fill_between(x, y.real - sigma, y.real + sigma, color="lightblue")
-    top.plot(x, y.real, linewidth=1)
-    top.scatter(x_meas, y_meas.real, s=10)
-    #top.set_xlabel("Grid index")
+    top.fill_between(
+        x,
+        yhat.real - yvar.sqrt(),
+        yhat.real + yvar.sqrt(),
+        color="lightblue",
+    )
+    top.plot(x, y0.real, linewidth=1, color="grey", linestyle="--")
+    top.plot(x, yhat.real, linewidth=1)
+    top.scatter(xobs, yobs.real, s=10)
     top.set_ylabel("Signal (real)")
     top.grid(color=(0.9,) * 3)
 
-    bottom.fill_between(x, y.imag - sigma, y.imag + sigma, color="lightgreen")
-    bottom.plot(x, y.imag, linewidth=1, color="darkgreen")
-    bottom.scatter(x_meas, y_meas.imag, s=10, color="darkgreen")
+    bottom.fill_between(
+        x,
+        yhat.imag - yvar.sqrt(),
+        yhat.imag + yvar.sqrt(),
+        color="lightgreen",
+    )
+    bottom.plot(x, y0.imag, linewidth=1, color="grey", linestyle="--")
+    bottom.plot(x, yhat.imag, linewidth=1, color="darkgreen")
+    bottom.scatter(xobs, yobs.imag, s=10, color="darkgreen")
     bottom.set_xlabel("Grid index")
     bottom.set_ylabel("Signal (imaginary)")
     bottom.grid(color=(0.9,) * 3)
