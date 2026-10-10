@@ -45,7 +45,14 @@ def ans(
         kwargs: Keyword arguments passed to :attr:`model`.
 
     Returns:
-        Measured data and final time-domain and frequency-domain estimates.
+        A :class:`tuple` containing
+
+        - :math:`(b, m)`, Time-domain measurements (complex).
+        - :math:`(m)`, Time-domain measurement indices.
+        - :math:`(b, n)`, Frequency-domain mean (complex).
+        - :math:`(b, n)`, Frequency-domain variance (real, positive).
+        - :math:`(b, n)`, Time-domain mean (complex).
+        - :math:`(b, n)`, Time-domain variance (real, positive).
     """
 
     def adapt_size(m_next: int, n_prev: int) -> int:
@@ -78,15 +85,7 @@ def ans(
         ids = torch.cat((ids, next_index))
         y = torch.cat((y, y_next), dim=-1)
 
-        state = SamplerReturnType(
-            y=y,
-            ids=ids,
-            mu=mu,
-            gamma_diag=gamma_diag,
-            yhat=yhat,
-            sigma_diag=sigma_diag,
-        )
-
+        state = (y, ids, mu, gamma_diag, yhat, sigma_diag)
         if callback is not None:
             callback(state)
 

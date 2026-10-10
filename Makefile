@@ -4,6 +4,7 @@ all: build
 
 build:
 	uv sync
+	uv sync --group notebooks
 
 clean:
 	rm -rvf build dist vrlsnmr.egg-info src/vrlsnmr.egg-info
