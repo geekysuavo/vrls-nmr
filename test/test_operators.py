@@ -1,17 +1,29 @@
+# Standard
 import cmath
 import itertools
 import math
 
+# Third party
 import pytest
 import torch
 from torch import Tensor
 
+# VRLS
 import vrlsnmr.operators as op
+
+_mn_pairs = list(
+    itertools.chain(
+        itertools.combinations(range(2, 64, 4), 2),
+        itertools.combinations(range(64, 256, 16), 2),
+        itertools.combinations(range(256, 1024, 64), 2),
+    )
+)
 
 
 @pytest.fixture(params=("10x100", "50x100", "20x80"))
 def shape(request) -> tuple[int, int]:
-    return tuple(map(int, request.param.split("x")))
+    (m, n) = map(int, request.param.split("x"))
+    return (m, n)
 
 
 @pytest.fixture(params=("cpu", "cuda"))
@@ -45,10 +57,10 @@ def matrices(tau, shape, device, dtype) -> tuple[Tensor, ...]:
     omega = cmath.exp(-2j * math.pi / n)
     i = torch.arange(n).unsqueeze(dim=0)
     j = torch.arange(n).unsqueeze(dim=1)
-    Phi = omega**(i * j) / math.sqrt(n)
+    Phi = omega ** (i * j) / math.sqrt(n)
     Phi = Phi.t().conj()
 
-    A = B.cfloat() @ Phi
+    A = B.to(torch.cfloat) @ Phi
 
     A = A.to(device=device, dtype=dtype.to_complex())
     B = B.to(device=device, dtype=dtype)
@@ -56,10 +68,7 @@ def matrices(tau, shape, device, dtype) -> tuple[Tensor, ...]:
     ids = ids.to(device=device, dtype=torch.long)
 
     tau = (
-        torch.randn((bs, 50), device=device, dtype=dtype)
-        .square()
-        .mean(dim=-1)
-        .mul(tau)
+        torch.randn((bs, 50), device=device, dtype=dtype).square().mean(dim=-1).mul(tau)
     )
 
     weights = (
@@ -73,8 +82,8 @@ def matrices(tau, shape, device, dtype) -> tuple[Tensor, ...]:
 
 
 def test_kernel(matrices):
-    (A, B, Phi, ids, tau, w) = matrices
-    (m, n) = A.shape
+    (A, _, _, ids, tau, w) = matrices
+    (m, _) = A.shape
 
     Im = torch.eye(m, device=A.device, dtype=A.dtype)
     Winv = w.reciprocal().diag_embed().to(dtype=A.dtype)
@@ -88,8 +97,8 @@ def test_kernel(matrices):
 
 
 def test_xmarginal(matrices):
-    (A, B, Phi, ids, tau, w) = matrices
-    (m, n) = A.shape
+    (A, _, _, ids, tau, w) = matrices
+    (m, _) = A.shape
 
     Im = torch.eye(m, device=A.device, dtype=A.dtype)
     Winv = w.reciprocal().diag_embed().to(dtype=A.dtype)
@@ -105,8 +114,8 @@ def test_xmarginal(matrices):
 
 
 def test_ymarginal(matrices):
-    (A, B, Phi, ids, tau, w) = matrices
-    (m, n) = A.shape
+    (A, _, Phi, ids, tau, w) = matrices
+    (m, _) = A.shape
 
     Im = torch.eye(m, device=A.device, dtype=A.dtype)
     Winv = w.reciprocal().diag_embed().to(dtype=A.dtype)
@@ -123,14 +132,7 @@ def test_ymarginal(matrices):
     assert s.gt(0).all()
 
 
-@pytest.mark.parametrize(
-    ("m", "n"),
-    itertools.chain(
-        itertools.combinations(range(2, 64, 4), 2),
-        itertools.combinations(range(64, 256, 16), 2),
-        itertools.combinations(range(256, 1024, 64), 2),
-    ),
-)
+@pytest.mark.parametrize(("m", "n"), _mn_pairs)
 def test_schedexp(int_dtype, m, n):
     rate = -math.log(0.2) / n
     ids = op.schedexp(rate, m, n, dtype=int_dtype)
@@ -142,14 +144,7 @@ def test_schedexp(int_dtype, m, n):
     assert ids.unique().numel() == m
 
 
-@pytest.mark.parametrize(
-    ("m", "n"),
-    itertools.chain(
-        itertools.combinations(range(2, 64, 4), 2),
-        itertools.combinations(range(64, 256, 16), 2),
-        itertools.combinations(range(256, 1024, 64), 2),
-    ),
-)
+@pytest.mark.parametrize(("m", "n"), _mn_pairs)
 def test_schedpg(int_dtype, m, n):
     ids = op.schedpg(m, n, dtype=int_dtype)
 

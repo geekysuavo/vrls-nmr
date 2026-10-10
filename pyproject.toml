@@ -1,0 +1,97 @@
+[project]
+name = "vrlsnmr"
+version = "0.0.1"
+description = "Variationally reweighted least squares for nonuniformly sampled NMR"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE.md"]
+authors = [
+    { name = "Bradley Worley", email = "geekysuavo@gmail.com" },
+]
+requires-python = ">=3.12,<3.13"
+dependencies = ["torch>=2.11"]
+
+[dependency-groups]
+build = ["pybind11>=3", "setuptools>=81", "torch>=2.11", "wheel>=0.48"]
+dev = [
+    { include-group = "build" },
+    { include-group = "lint" },
+    { include-group = "test" },
+]
+lint = [
+    "ruff>=0.17.0",
+    "ty>=0.0.86",
+]
+notebooks = [
+    "marimo>=0.25.1",
+    "matplotlib>=3.11.2",
+    "numpy>=2.5.3",
+    "pandas>=3.0.6",
+    "seaborn>=0.13.2",
+]
+test = [
+    "numpy>=2.5.3",
+    "pytest>=9.1.1",
+]
+
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = ["pybind11>=3", "setuptools", "torch>=2.11", "wheel>=0.48"]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+
+[tool.ruff]
+target-version = "py312"
+exclude = ["notebooks"]
+
+[tool.ruff.lint]
+extend-select = [
+    "A",    # flake8-builtins
+    "C",    # complexity
+    "D",    # pydocstyle
+    "E",    # pycodestyle-error
+    "F",    # pyflakes
+    "G",    # flake8-logging-format
+    "I",    # isort
+    "LOG",  # flake8-logging
+    "N",    # pep8-naming
+    "NPY",  # numpy
+    "PT",   # pytest
+    "PTH",  # flake8-use-pathlib
+    "Q",    # flake8-quotes
+    "RUF",  # ruff-specific
+    "W",    # pycodestyle-warning
+]
+extend-ignore = [
+    "D203",  # incorrect-blank-line-before-class
+    "D212",  # multi-line-summary-first-line
+    "N806",  # non-lowercase-variable-in-function
+]
+
+[tool.ruff.lint.isort.import-heading]
+future = "Future"
+standard-library = "Standard"
+third-party = "Third party"
+first-party = "VRLS"
+
+[tool.ruff.lint.per-file-ignores]
+"test/*" = ["D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.setuptools]
+packages = ["vrlsnmr"]
+
+[tool.uv]
+default-groups = ["dev"]
+no-build-isolation-package = ["vrlsnmr"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true

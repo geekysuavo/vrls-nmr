@@ -1,20 +1,21 @@
-import math
-from typing import Callable
+"""Data simulation functionality."""
 
+# Standard
+import math
+from collections.abc import Callable
+
+# Third party
 import torch
-from torch import nn, Tensor
+from torch import Tensor, nn
 
 
 class Signal(nn.Module):
-    """
-    Basic one-dimensional signal (FID) simulator.
+    """Basic one-dimensional signal (FID) simulator."""
 
-    Args:
-        frequencies: :math:`(k)` or `(b, k)`, Frequencies.
-        decayrates: :math:`(k)` or :math:`(b, k)`, Decay rates.
-        amplitudes: :math:`(k)` or :math:`(b, k)`, Amplitudes.
-        phases: :math:`(k)` or :math:`(b, k)`, Phase shifts.
-    """
+    frequencies: Tensor
+    decayrates: Tensor
+    amplitudes: Tensor
+    phases: Tensor
 
     def __init__(
         self,
@@ -23,6 +24,15 @@ class Signal(nn.Module):
         amplitudes: Tensor,
         phases: Tensor,
     ):
+        """
+        Initialize the simulator.
+
+        Args:
+            frequencies: :math:`(k)` or `(b, k)`, Frequencies.
+            decayrates: :math:`(k)` or :math:`(b, k)`, Decay rates.
+            amplitudes: :math:`(k)` or :math:`(b, k)`, Amplitudes.
+            phases: :math:`(k)` or :math:`(b, k)`, Phase shifts.
+        """
         super().__init__()
 
         shapes = {
@@ -49,12 +59,13 @@ class Signal(nn.Module):
         self.register_buffer("amplitudes", amplitudes)
         self.register_buffer("phases", phases)
 
-    def forward(self, t: int | float | Tensor, *, noise: float = 0.0) -> Tensor:
+    def forward(self, t: float | Tensor, *, noise: float = 0.0) -> Tensor:
         """
         Simulate measurement at a given time.
 
         Args:
             t: :math:`()` or :math:`(n)`, Measurement times.
+            noise: Noise standard deviation.
 
         Returns:
             Output values, whose shape depends on the parameter shapes.
@@ -80,10 +91,7 @@ class Signal(nn.Module):
 
     def to_dict(self) -> dict[str, list]:
         """Return a dictionary of signal parameters."""
-        return {
-            name: buffer.squeeze().tolist()
-            for name, buffer in self.named_buffers()
-        }
+        return {name: buf.squeeze().tolist() for name, buf in self.named_buffers()}
 
     @classmethod
     def build(
@@ -182,11 +190,15 @@ def random_unif(n: int, bs: int, *, lower: float, upper: float) -> Tensor:
 
 
 def random_spaced(
-    n: int, bs: int, *, lower: float, upper: float, space: float
+    n: int,
+    bs: int,
+    *,
+    lower: float,
+    upper: float,
+    space: float,
 ) -> Tensor:
     """
-    Build a tensor filled with uniformly distributed values such that
-    no two values are within a minimum spacing.
+    Build a tensor filled with minimally spaced uniformly distributed values.
 
     Args:
         n: Number of components.
@@ -198,6 +210,7 @@ def random_spaced(
     Returns:
         :math:`(bs, n)`, Output tensor.
     """
+
     def sample():
         return random_unif(1, bs, lower=lower, upper=upper)
 

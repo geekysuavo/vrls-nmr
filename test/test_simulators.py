@@ -1,15 +1,18 @@
+# Standard
 from functools import partial
 
+# Third party
 import pytest
 import torch
 
+# VRLS
 from vrlsnmr.simulators import (
+    Signal,
     constant,
     random_chisq,
     random_normal,
     random_spaced,
     random_unif,
-    Signal,
 )
 
 
@@ -23,7 +26,7 @@ def num_replicas(request) -> int:
     return request.param
 
 
-@pytest.mark.parametrize("value", (1.1, 2.2))
+@pytest.mark.parametrize("value", [1.1, 2.2])
 def test_constant(num_components, num_replicas, value):
     out = constant(num_components, num_replicas, value=value)
 
@@ -34,8 +37,8 @@ def test_constant(num_components, num_replicas, value):
     assert out.eq(value).all()
 
 
-@pytest.mark.parametrize("mean", (1.0, 55.5))
-@pytest.mark.parametrize("dof", (1, 5, 10))
+@pytest.mark.parametrize("mean", [1.0, 55.5])
+@pytest.mark.parametrize("dof", [1, 5, 10])
 def test_random_chisq(num_components, num_replicas, dof, mean):
     out = random_chisq(num_components, num_replicas, dof=dof, mean=mean)
 
@@ -46,8 +49,8 @@ def test_random_chisq(num_components, num_replicas, dof, mean):
     assert out.gt(0).all()
 
 
-@pytest.mark.parametrize("stdev", (1.0, 0.1))
-@pytest.mark.parametrize("mean", (0.0, 1.0, -2.5))
+@pytest.mark.parametrize("stdev", [1.0, 0.1])
+@pytest.mark.parametrize("mean", [0.0, 1.0, -2.5])
 def test_random_normal(num_components, num_replicas, mean, stdev):
     out = random_normal(num_components, num_replicas, mean=mean, stdev=stdev)
 
@@ -57,8 +60,8 @@ def test_random_normal(num_components, num_replicas, mean, stdev):
     assert out.isfinite().all()
 
 
-@pytest.mark.parametrize("space", (0.001, 0.01))
-@pytest.mark.parametrize(("lower", "upper"), ((0.0, 1.0), (3.3, 4.4)))
+@pytest.mark.parametrize("space", [0.001, 0.01])
+@pytest.mark.parametrize(("lower", "upper"), [(0.0, 1.0), (3.3, 4.4)])
 def test_random_spaced(num_components, num_replicas, lower, upper, space):
     out = random_spaced(
         num_components, num_replicas, lower=lower, upper=upper, space=space
@@ -77,7 +80,7 @@ def test_random_spaced(num_components, num_replicas, lower, upper, space):
     assert (out[:, i] - out[:, j]).abs().gt(space).all()
 
 
-@pytest.mark.parametrize(("lower", "upper"), ((0.0, 1.0), (3.3, 4.4)))
+@pytest.mark.parametrize(("lower", "upper"), [(0.0, 1.0), (3.3, 4.4)])
 def test_random_unif(num_components, num_replicas, lower, upper):
     out = random_unif(num_components, num_replicas, lower=lower, upper=upper)
 

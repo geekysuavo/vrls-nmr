@@ -1,14 +1,19 @@
-from typing import Callable
+"""Sampling and reconstruction algorithms."""
 
+# Standard
+from collections.abc import Callable
+
+# Third party
 import torch
 from torch import Tensor
 
+# VRLS
 import vrlsnmr.operators as op
 
-PointEstimatorReturnType = tuple[Tensor, Tensor]
-AlgorithmReturnType = tuple[Tensor, Tensor, Tensor, Tensor]
-AlgorithmFunc = Callable[[Tensor, Tensor, ...], AlgorithmReturnType]
-MeasurementFunc = Callable[[int], Tensor]
+type PointEstimatorReturnType = tuple[Tensor, Tensor]
+type AlgorithmReturnType = tuple[Tensor, Tensor, Tensor, Tensor]
+type AlgorithmFunc = Callable[..., AlgorithmReturnType]
+type MeasurementFunc = Callable[[int], Tensor]
 
 
 def ans(
@@ -19,7 +24,7 @@ def ans(
     n_initial: int,
     n_final: int,
     min_sparsity: float,
-    **kwargs: bool | int | float,
+    **kwargs: bool | float,
 ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
     """
     Active nonuniform sampling (ANS).
@@ -47,6 +52,7 @@ def ans(
         - :math:`(b, n)`, Time-domain mean (complex).
         - :math:`(b, n)`, Time-domain variance (real, positive).
     """
+
     def adapt_size(m_next: int, n_prev: int) -> int:
         n_next = n_prev
         while n_next < n_final and m_next / n_next >= min_sparsity:
@@ -72,7 +78,7 @@ def ans(
         objective[ids] = 0
 
         next_index = objective.argmax(keepdim=True)
-        y_next = measure(next_index.item())
+        y_next = measure(int(next_index.item()))
         ids = torch.cat((ids, next_index))
         y = torch.cat((y, y_next), dim=-1)
 
@@ -120,10 +126,10 @@ def vrls(
 
     w = torch.ones((bs, n), dtype=real_dtype, device=device)
     mu = torch.zeros((bs, n), dtype=complex_dtype, device=device)
-    tau = torch.full((bs,), tau, dtype=real_dtype, device=device)
+    tau_batched = torch.full((bs,), tau, dtype=real_dtype, device=device)
 
     for _ in range(niter):
-        K = op.kernel(w, tau, ids)
+        K = op.kernel(w, tau_batched, ids)
         Kinv = torch.linalg.inv(K)
 
         mu.mul_(0)
@@ -279,8 +285,8 @@ def vrls_mf(
     yhat = torch.fft.ifft(mu, norm="ortho")
 
     if full_var:
-        tau = w.new_full((bs,), tau)
-        K = op.kernel(w, tau, ids)
+        tau_batched = w.new_full((bs,), tau)
+        K = op.kernel(w, tau_batched, ids)
         Kinv = torch.linalg.inv(K)
         gamma = op.xmarginal(Kinv, w, ids)
         sigma = op.ymarginal(Kinv, w, ids)
@@ -320,7 +326,7 @@ def ists(
     if y.ndim == 1:
         y = y.unsqueeze(dim=0)
 
-    (bs, m) = y.shape
+    (bs, _) = y.shape
 
     xhat = torch.zeros((bs, n), dtype=complex_dtype, device=device)
     yhat = torch.zeros((bs, n), dtype=complex_dtype, device=device)

@@ -1,16 +1,26 @@
-.PHONY: clean again test
+.PHONY: clean again lint ruff ty test
 
 all: build
 
 build:
-	python setup.py build
-	python setup.py bdist_wheel
-	pip install dist/*.whl
+	uv sync
 
 clean:
-	pip uninstall vrlsnmr -y
-	rm -rvf build dist vrlsnmr.egg-info .ipynb_checkpoints
+	rm -rvf build dist vrlsnmr.egg-info
 	rm -rvf vrlsnmr/__pycache__ test/__pycache__
 	rm -vf vrlsnmr/_ops.so
 
 again: clean build
+	uv sync --reinstall-package vrlsnmr
+
+lint: ruff ty
+
+ruff:
+	uv run ruff format --check
+	uv run ruff check
+
+ty:
+	uv run ty check
+
+test:
+	uv run pytest

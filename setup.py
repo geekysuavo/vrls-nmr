@@ -1,5 +1,8 @@
+"""Main setup script, builds CUDA/C++ extension."""
+
+# Third party
 import pybind11
-from setuptools import find_packages, setup
+from setuptools import setup
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 
 ext = CUDAExtension(
@@ -17,17 +20,6 @@ ext = CUDAExtension(
     extra_compile_args={"cxx": ["-fopenmp"]},
 )
 
-build_ext = BuildExtension.with_options(
-    no_python_abi_suffix=True,
-    use_ninja=False,
-)
+build_ext = BuildExtension.with_options(no_python_abi_suffix=True, use_ninja=False)
 
-setup(
-    name="vrlsnmr",
-    version="0.0.1",
-    author="Bradley Worley",
-    author_email="geekysuavo@gmail.com",
-    packages=find_packages(),
-    ext_modules=[ext],
-    cmdclass={"build_ext": build_ext},
-)
+setup(ext_modules=[ext], cmdclass={"build_ext": build_ext})

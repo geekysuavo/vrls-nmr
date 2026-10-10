@@ -7,36 +7,42 @@ sampled nuclear magnetic resonance_ (NUS NMR) acquisition.
 
 ## Building
 
-To build the **vrls-nmr** extension module, you will need PyTorch
-and a complete compiler toolchain,
+The **vrls-nmr** project is managed by [uv](https://docs.astral.sh/uv/).
+To create the environment and build the extension module, run
 ```bash
-pip install torch pybind11
+uv sync
 ```
-and then build and install the module:
-```bash
-python3 setup.py build
-python3 setup.py bdist_wheel
-pip install dist/*whl
-```
-Running `make` or `make build` will run the same steps.
+Running `make` or `make build` will run the same steps, and running
+`make again` forces a rebuild.
 
 ## Testing
 
 A small set of unit tests is available in the [test](test/) directory
 and may be executed using [pytest](https://docs.pytest.org/):
 ```bash
-pip install pytest
-pytest test
+uv run pytest
 ```
+Running `make test` will run the same steps.
+
+## Linting
+
+The python source files are formatted and linted
+with [ruff](https://docs.astral.sh/ruff/) and
+type-checked with [ty](https://docs.astral.sh/ty/):
+```bash
+uv run ruff format --check
+uv run ruff check
+uv run ty check
+```
+Running `make lint` will run the same steps.
 
 ## Notebooks
 
 Analyses in the [notebooks](notebooks/) directory may be opened
 using [marimo](https://marimo.io/):
 ```bash
-pip install marimo
-cd notebooks/
-marimo edit param-tuning.py
+uv sync --group notebooks
+uv run marimo edit notebooks/param-tuning.py
 ```
 
 ## Licensing

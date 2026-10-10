@@ -1,7 +1,10 @@
 # .gitignore
 .DS_Store
+.*.swp
 vrlsnmr.egg-info
+vrlsnmr/_ops.so
 environ
+__pycache__
 __marimo__
 *.parquet
 *.pickle

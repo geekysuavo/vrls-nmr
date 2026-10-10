@@ -1,10 +1,13 @@
+# Standard
 import cmath
 import math
 
+# Third party
 import pytest
 import torch
 from torch import Tensor
 
+# VRLS
 from vrlsnmr.algorithms import ists, vrls, vrls_ex, vrls_mf
 
 
@@ -22,16 +25,16 @@ def build_instance(
     omega = cmath.exp(-2j * math.pi / n)
     i = torch.arange(n).unsqueeze(dim=0)
     j = torch.arange(n).unsqueeze(dim=1)
-    Phi = omega**(i * j) / math.sqrt(n)
+    Phi = omega ** (i * j) / math.sqrt(n)
     Phi = Phi.t().conj()  # idft
-    A = B.cfloat() @ Phi
+    A = B.to(torch.cfloat) @ Phi
 
     x0 = torch.zeros(bs, n)
     for b in range(bs):
         x0_ids = torch.randperm(n).narrow(dim=0, start=0, length=k)
         x0[b, x0_ids] = 1.0
 
-    x0 = x0.cfloat()
+    x0 = x0.to(torch.cfloat)
 
     noise = stdev * torch.randn((bs, m), dtype=torch.cfloat)
     y = A.view(1, m, n) @ x0.view(bs, n, 1) + noise.view(bs, m, 1)
@@ -87,7 +90,7 @@ def test_vrls_ex():
     assert xmean.abs().gt(0.5).sum(dim=1).eq(k).all()
 
 
-@pytest.mark.parametrize("full_var", (False, True))
+@pytest.mark.parametrize("full_var", [False, True])
 def test_vrls_mf(full_var):
     (k, n, niter) = (10, 100, 100)
     stdev = 0.01

@@ -1,5 +1,9 @@
+"""Bindings for compiled operators."""
+
+# Standard
 from pathlib import Path
 
+# Third party
 import torch
 from torch import Tensor
 
@@ -72,10 +76,8 @@ def schedunif(
     Returns:
         :math:`(m)`, Indices to sample.
     """
-    return (
-        torch.randperm(n, dtype=dtype, device=device)
-        .narrow(dim=0, start=0, length=m)
-    )
+    perm = torch.randperm(n, dtype=dtype, device=device)
+    return perm.narrow(dim=0, start=0, length=m)
 
 
 def schedexp(
