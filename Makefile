@@ -6,7 +6,7 @@ build:
 	uv sync
 
 clean:
-	rm -rvf build dist vrlsnmr.egg-info
+	rm -rvf build dist vrlsnmr.egg-info src/vrlsnmr.egg-info
 	rm -rvf vrlsnmr/__pycache__ test/__pycache__
 	rm -vf vrlsnmr/_ops.so
 
