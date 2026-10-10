@@ -9,8 +9,10 @@ import vrlsnmr.operators as op
 from vrlsnmr.types import (
     AlgorithmFunc,
     AlgorithmReturnType,
+    CallbackFunc,
     MeasurementFunc,
     PointEstimatorReturnType,
+    SamplerReturnType,
 )
 
 
@@ -22,8 +24,9 @@ def ans(
     n_initial: int,
     n_final: int,
     min_sparsity: float,
+    callback: CallbackFunc | None = None,
     **kwargs: bool | float,
-) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
+) -> SamplerReturnType:
     """
     Active nonuniform sampling (ANS).
 
@@ -38,17 +41,11 @@ def ans(
         n_initial: Initial (minimum) Fourier grid size.
         n_final: Final (maximum) Fourier grid size.
         min_sparsity: Minimum sparsity maintained for :attr:`model`.
+        callback: Optional function to call at the end of each step.
         kwargs: Keyword arguments passed to :attr:`model`.
 
     Returns:
-        A :class:`tuple` containing
-
-        - :math:`(b, m)`, Final time-domain measurements (complex).
-        - :math:`(m)`, Final time-domain measurement indices.
-        - :math:`(b, n)`, Frequency-domain mean (complex).
-        - :math:`(b, n)`, Frequency-domain variance (real, positive).
-        - :math:`(b, n)`, Time-domain mean (complex).
-        - :math:`(b, n)`, Time-domain variance (real, positive).
+        Measured data and final time-domain and frequency-domain estimates.
     """
 
     def adapt_size(m_next: int, n_prev: int) -> int:
@@ -61,6 +58,7 @@ def ans(
     ids = torch.arange(m_initial, device=y.device)
     (m, n) = (m_initial, n_initial)
 
+    state = None
     while m < m_final:
         m = ids.numel()
         n = adapt_size(m, n)
@@ -80,7 +78,20 @@ def ans(
         ids = torch.cat((ids, next_index))
         y = torch.cat((y, y_next), dim=-1)
 
-    return (y, ids, mu, gamma_diag, yhat, sigma_diag)
+        state = SamplerReturnType(
+            y=y,
+            ids=ids,
+            mu=mu,
+            gamma_diag=gamma_diag,
+            yhat=yhat,
+            sigma_diag=sigma_diag,
+        )
+
+        if callback is not None:
+            callback(state)
+
+    assert state is not None
+    return state
 
 
 @torch.inference_mode()
