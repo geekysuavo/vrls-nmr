@@ -24,6 +24,7 @@ def ans(
     n_initial: int,
     n_final: int,
     min_sparsity: float,
+    warm_start: bool = False,
     callback: CallbackFunc | None = None,
     **kwargs: bool | float,
 ) -> SamplerReturnType:
@@ -41,6 +42,7 @@ def ans(
         n_initial: Initial (minimum) Fourier grid size.
         n_final: Final (maximum) Fourier grid size.
         min_sparsity: Minimum sparsity maintained for :attr:`model`.
+        warm_start: When true, model weights are carried between steps.
         callback: Optional function to call at the end of each step.
         kwargs: Keyword arguments passed to :attr:`model`.
 
@@ -65,11 +67,17 @@ def ans(
     ids = torch.arange(m_initial, device=y.device)
     (m, n) = (m_initial, n_initial)
 
+    w = True
     state = None
     while m < m_final:
         m = ids.numel()
         n = adapt_size(m, n)
-        (mu, gamma_diag, yhat, sigma_diag) = model(y, ids, n=n, **kwargs)
+
+        if warm_start:
+            _out = model(y, ids, n=n, warm_start=w, **kwargs)
+            (mu, gamma_diag, yhat, sigma_diag, w) = _out
+        else:
+            (mu, gamma_diag, yhat, sigma_diag) = model(y, ids, n=n, **kwargs)
 
         mu = mu.roll(n // 2, dims=1)
         gamma_diag = gamma_diag.roll(n // 2, dims=1)
@@ -102,6 +110,7 @@ def vrls(
     n: int,
     niter: int,
     eps: float = 1.0e-9,
+    warm_start: bool | Tensor = False,
 ) -> AlgorithmReturnType:
     """
     Basic VRLS.
@@ -114,6 +123,7 @@ def vrls(
         n: Sparse dimension size.
         niter: Number of iterations.
         eps: Weight update positivity parameter.
+        warm_start: Optional initial weights, or whether to return final weights.
 
     Returns:
         A :class:`tuple` containing
@@ -122,6 +132,8 @@ def vrls(
         - :math:`(b, n)`, Frequency-domain variance (real, positive).
         - :math:`(b, n)`, Time-domain mean (complex).
         - :math:`(b, n)`, Time-domain variance (real, positive).
+        - :math:`(b, n)`, Frequency-domain weights (real, positive), only returned
+          when :attr:`warm_start` is true or a tensor.
     """
     device = y.device
     complex_dtype = y.dtype
@@ -132,9 +144,15 @@ def vrls(
 
     bs = y.size(dim=0)
 
-    w = torch.ones((bs, n), dtype=real_dtype, device=device)
     mu = torch.zeros((bs, n), dtype=complex_dtype, device=device)
     tau_batched = torch.full((bs,), tau, dtype=real_dtype, device=device)
+
+    if torch.is_tensor(warm_start):
+        w = warm_start
+        return_weights = True
+    else:
+        w = torch.ones((bs, n), dtype=real_dtype, device=device)
+        return_weights = warm_start
 
     for _ in range(niter):
         K = op.kernel(w, tau_batched, ids)
@@ -152,7 +170,10 @@ def vrls(
     yhat = torch.fft.ifft(mu, norm="ortho")
     sigma_diag = op.ymarginal(Kinv, w, ids)
 
-    return (mu, gamma_diag, yhat, sigma_diag)
+    if return_weights:
+        return (mu, gamma_diag, yhat, sigma_diag, w)
+    else:
+        return (mu, gamma_diag, yhat, sigma_diag)
 
 
 @torch.inference_mode()
@@ -164,6 +185,7 @@ def vrls_ex(
     n: int,
     niter: int,
     eps: float = 1.0e-9,
+    warm_start: bool | Tensor = False,
 ) -> AlgorithmReturnType:
     """
     Extended VRLS.
@@ -176,6 +198,7 @@ def vrls_ex(
         n: Sparse dimension size.
         niter: Number of iterations.
         eps: Weight update positivity parameter.
+        warm_start: Optional initial weights, or whether to return final weights.
 
     Returns:
         A :class:`tuple` containing
@@ -184,6 +207,8 @@ def vrls_ex(
         - :math:`(b, n)`, Frequency-domain variance (real, positive).
         - :math:`(b, n)`, Time-domain mean (complex).
         - :math:`(b, n)`, Time-domain variance (real, positive).
+        - :math:`(b, n)`, Frequency-domain weights (real, positive), only returned
+          when :attr:`warm_start` is true or a tensor.
     """
     device = y.device
     complex_dtype = y.dtype
@@ -195,9 +220,15 @@ def vrls_ex(
     bs = y.size(dim=0)
 
     mu = torch.zeros((bs, n), dtype=complex_dtype, device=device)
-    nu_w = torch.ones((bs, n), dtype=real_dtype, device=device)
     nu_tau = torch.ones((bs,), dtype=real_dtype, device=device)
     nu_xi = torch.ones((bs,), dtype=real_dtype, device=device)
+
+    if torch.is_tensor(warm_start):
+        nu_w = warm_start
+        return_weights = True
+    else:
+        nu_w = torch.ones((bs, n), dtype=real_dtype, device=device)
+        return_weights = warm_start
 
     for _ in range(niter):
         K = op.kernel(nu_w, nu_tau, ids)
@@ -220,7 +251,10 @@ def vrls_ex(
         ess = err + sigma_diag[:, ids].sum(dim=-1) / n
         nu_tau = (beta_tau / ess).sqrt()
 
-    return (mu, gamma_diag, yhat, sigma_diag)
+    if return_weights:
+        return (mu, gamma_diag, yhat, sigma_diag, nu_w)
+    else:
+        return (mu, gamma_diag, yhat, sigma_diag)
 
 
 @torch.inference_mode()
@@ -233,6 +267,7 @@ def vrls_mf(
     niter: int,
     eps: float = 1.0e-9,
     full_var: bool = False,
+    warm_start: bool | Tensor = False,
 ) -> AlgorithmReturnType:
     """
     Fast mean-field VRLS.
@@ -247,6 +282,7 @@ def vrls_mf(
         eps: Weight update positivity parameter.
         full_var: When true, recompute marginal variances using the final
             mean-field weights and a full :func:`vrls` kernel matrix.
+        warm_start: Optional initial weights, or whether to return final weights.
 
     Returns:
         A :class:`tuple` containing
@@ -255,6 +291,8 @@ def vrls_mf(
         - :math:`(b, n)`, Frequency-domain variance (real, positive).
         - :math:`(b, n)`, Time-domain mean (complex).
         - :math:`(b, n)`, Time-domain variance (real, positive).
+        - :math:`(b, n)`, Frequency-domain weights (real, positive), only returned
+          when :attr:`warm_start` is true or a tensor.
     """
     device = y.device
     complex_dtype = y.dtype
@@ -265,9 +303,15 @@ def vrls_mf(
 
     (bs, m) = y.shape
 
-    w = torch.ones((bs, n), dtype=real_dtype, device=device)
     mu = torch.zeros((bs, n), dtype=complex_dtype, device=device)
     gamma = torch.ones((bs, n), dtype=real_dtype, device=device)
+
+    if torch.is_tensor(warm_start):
+        w = warm_start
+        return_weights = True
+    else:
+        w = torch.ones((bs, n), dtype=real_dtype, device=device)
+        return_weights = warm_start
 
     mask = torch.zeros((n,), dtype=torch.bool, device=device)
     mask[ids] = True
@@ -301,7 +345,10 @@ def vrls_mf(
     else:
         sigma = gamma.mean(dim=1, keepdim=True).expand_as(yhat)
 
-    return (mu, gamma, yhat, sigma)
+    if return_weights:
+        return (mu, gamma, yhat, sigma, w)
+    else:
+        return (mu, gamma, yhat, sigma)
 
 
 @torch.inference_mode()

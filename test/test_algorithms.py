@@ -44,7 +44,8 @@ def build_instance(
     return (y, ids)
 
 
-def test_vrls():
+@pytest.mark.parametrize("split", [False, True])
+def test_vrls(split):
     (k, n, niter) = (10, 100, 10)
     stdev = 0.01
     tau = 1 / stdev**2
@@ -52,12 +53,20 @@ def test_vrls():
 
     (y, ids) = build_instance(k=k, n=n, stdev=stdev)
 
-    out_cpu = vrls(y, ids, tau, xi, n, niter)
+    if split:
+        (*_, w) = vrls(y, ids, tau, xi, n, niter // 2, warm_start=True)
+        (*out_cpu, _) = vrls(y, ids, tau, xi, n, niter // 2, warm_start=w)
+    else:
+        out_cpu = vrls(y, ids, tau, xi, n, niter)
 
     y = y.cuda()
     ids = ids.cuda()
 
-    out_cuda = vrls(y, ids, tau, xi, n, niter)
+    if split:
+        (*_, w) = vrls(y, ids, tau, xi, n, niter // 2, warm_start=True)
+        (*out_cuda, _) = vrls(y, ids, tau, xi, n, niter // 2, warm_start=w)
+    else:
+        out_cuda = vrls(y, ids, tau, xi, n, niter)
 
     assert len(out_cpu) == len(out_cuda)
     for x_cpu, x_cuda in zip(out_cpu, out_cuda):
@@ -67,7 +76,8 @@ def test_vrls():
     assert xmean.abs().gt(0.5).sum(dim=1).eq(k).all()
 
 
-def test_vrls_ex():
+@pytest.mark.parametrize("split", [False, True])
+def test_vrls_ex(split):
     (k, n, niter) = (10, 100, 10)
     stdev = 0.01
     beta_tau = 1e6
@@ -75,12 +85,20 @@ def test_vrls_ex():
 
     (y, ids) = build_instance(k=k, n=n, stdev=stdev)
 
-    out_cpu = vrls_ex(y, ids, beta_tau, beta_xi, n, niter)
+    if split:
+        (*_, w) = vrls_ex(y, ids, beta_tau, beta_xi, n, niter // 2, warm_start=True)
+        (*out_cpu, _) = vrls_ex(y, ids, beta_tau, beta_xi, n, niter // 2, warm_start=w)
+    else:
+        out_cpu = vrls_ex(y, ids, beta_tau, beta_xi, n, niter)
 
     y = y.cuda()
     ids = ids.cuda()
 
-    out_cuda = vrls_ex(y, ids, beta_tau, beta_xi, n, niter)
+    if split:
+        (*_, w) = vrls_ex(y, ids, beta_tau, beta_xi, n, niter // 2, warm_start=True)
+        (*out_cuda, _) = vrls_ex(y, ids, beta_tau, beta_xi, n, niter // 2, warm_start=w)
+    else:
+        out_cuda = vrls_ex(y, ids, beta_tau, beta_xi, n, niter)
 
     assert len(out_cpu) == len(out_cuda)
     for x_cpu, x_cuda in zip(out_cpu, out_cuda):
@@ -90,8 +108,9 @@ def test_vrls_ex():
     assert xmean.abs().gt(0.5).sum(dim=1).eq(k).all()
 
 
+@pytest.mark.parametrize("split", [False, True])
 @pytest.mark.parametrize("full_var", [False, True])
-def test_vrls_mf(full_var):
+def test_vrls_mf(full_var, split):
     (k, n, niter) = (10, 100, 100)
     stdev = 0.01
     tau = 1 / stdev**2
@@ -99,12 +118,28 @@ def test_vrls_mf(full_var):
 
     (y, ids) = build_instance(k=k, n=n, stdev=stdev)
 
-    out_cpu = vrls_mf(y, ids, tau, xi, n, niter, full_var=full_var)
+    if split:
+        (*_, w) = vrls_mf(
+            y, ids, tau, xi, n, niter // 2, full_var=full_var, warm_start=True
+        )
+        (*out_cpu, _) = vrls_mf(
+            y, ids, tau, xi, n, niter // 2, full_var=full_var, warm_start=w
+        )
+    else:
+        out_cpu = vrls_mf(y, ids, tau, xi, n, niter, full_var=full_var)
 
     y = y.cuda()
     ids = ids.cuda()
 
-    out_cuda = vrls_mf(y, ids, tau, xi, n, niter, full_var=full_var)
+    if split:
+        (*_, w) = vrls_mf(
+            y, ids, tau, xi, n, niter // 2, full_var=full_var, warm_start=True
+        )
+        (*out_cuda, _) = vrls_mf(
+            y, ids, tau, xi, n, niter // 2, full_var=full_var, warm_start=w
+        )
+    else:
+        out_cuda = vrls_mf(y, ids, tau, xi, n, niter, full_var=full_var)
 
     assert len(out_cpu) == len(out_cuda)
     for x_cpu, x_cuda in zip(out_cpu, out_cuda):

@@ -7,7 +7,10 @@ from collections.abc import Callable
 from torch import Tensor
 
 type PointEstimatorReturnType = tuple[Tensor, Tensor]
-type AlgorithmReturnType = tuple[Tensor, Tensor, Tensor, Tensor]
+type AlgorithmReturnType = (
+    tuple[Tensor, Tensor, Tensor, Tensor]
+    | tuple[Tensor, Tensor, Tensor, Tensor, Tensor]
+)
 type SamplerReturnType = tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]
 type AlgorithmFunc = Callable[..., AlgorithmReturnType]
 type MeasurementFunc = Callable[[int], Tensor]
