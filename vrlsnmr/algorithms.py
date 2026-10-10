@@ -1,19 +1,17 @@
 """Sampling and reconstruction algorithms."""
 
-# Standard
-from collections.abc import Callable
-
 # Third party
 import torch
 from torch import Tensor
 
 # VRLS
 import vrlsnmr.operators as op
-
-type PointEstimatorReturnType = tuple[Tensor, Tensor]
-type AlgorithmReturnType = tuple[Tensor, Tensor, Tensor, Tensor]
-type AlgorithmFunc = Callable[..., AlgorithmReturnType]
-type MeasurementFunc = Callable[[int], Tensor]
+from vrlsnmr.types import (
+    AlgorithmFunc,
+    AlgorithmReturnType,
+    MeasurementFunc,
+    PointEstimatorReturnType,
+)
 
 
 def ans(
