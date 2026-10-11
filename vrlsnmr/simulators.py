@@ -60,12 +60,6 @@ class Signal(nn.Module):
             multidim = frequencies.ndim == 2
 
         assert len({frequencies.shape, decayrates.shape, phases.shape}) == 1
-        # at this point, we know that the tensor shapes are consistent.
-        #
-        # batched=False multidim=False : ampl=(k)   freq=(k)
-        # batched=True  multidim=False : ampl=(b,k) freq=(b,k)
-        # batched=False multidim=True  : ampl=(k)   freq=(k,d)
-        # batched=True  multidim=True  : ampl=(b,k) freq=(b,k,d)
 
         if batched:
             amplitudes = amplitudes.unsqueeze(dim=1)
@@ -140,6 +134,12 @@ class Signal(nn.Module):
         Returns:
             :math:`(m, c)` or :math:`(b, m, c)`, Output signal values,
             where :math:`c = 2^{d-1}`.
+
+        Note:
+            When unbatched, amplitudes have shape :math:`(k, 1)` and nonlinear
+            parameters have shape :math:`(k, d)`. When batched, amplitudes
+            have shape :math:`(b, 1, k, 1)` and nonlinear parameters
+            have shape :math:`(b, 1, k, d)`.
         """
         t = t.unsqueeze(dim=-2)  # (m, 1, d)
         decay = (-self.decayrates * t).exp()  # (m, k, d) or (b, m, k, d)
