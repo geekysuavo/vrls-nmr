@@ -67,9 +67,6 @@ class Signal(nn.Module):
             decayrates = decayrates.unsqueeze(dim=1)
             phases = phases.unsqueeze(dim=1)
 
-        if multidim:
-            amplitudes = amplitudes.unsqueeze(dim=-1)
-
         self.batched = batched
         self.multidim = multidim
         self.register_buffer("amplitudes", amplitudes)
@@ -136,16 +133,16 @@ class Signal(nn.Module):
             where :math:`c = 2^{d-1}`.
 
         Note:
-            When unbatched, amplitudes have shape :math:`(k, 1)` and nonlinear
+            When unbatched, amplitudes have shape :math:`(k)` and nonlinear
             parameters have shape :math:`(k, d)`. When batched, amplitudes
-            have shape :math:`(b, 1, k, 1)` and nonlinear parameters
+            have shape :math:`(b, 1, k)` and nonlinear parameters
             have shape :math:`(b, 1, k, d)`.
         """
         t = t.unsqueeze(dim=-2)  # (m, 1, d)
         decay = (-self.decayrates * t).exp()  # (m, k, d) or (b, m, k, d)
         angle = self.frequencies * t + self.phases
-        real = self.amplitudes * decay * angle.cos()
-        imag = self.amplitudes * decay * angle.sin()
+        real = decay * angle.cos()
+        imag = decay * angle.sin()
 
         num_dimensions = imag.size(dim=-1)
         num_channels = 1 << num_dimensions
@@ -154,7 +151,8 @@ class Signal(nn.Module):
         out_channels = []
         for channel in range(num_channels):
             mask = (1 << dims) & channel
-            func = torch.where(mask.bool(), imag, real).prod(dim=-1).sum(dim=-1)
+            phi = torch.where(mask.bool(), imag, real).prod(dim=-1)
+            func = (self.amplitudes * phi).sum(dim=-1)
             out_channels.append(func)
 
         out = torch.stack(out_channels, dim=-1)
