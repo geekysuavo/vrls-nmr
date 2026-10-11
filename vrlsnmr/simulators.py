@@ -3,6 +3,7 @@
 # Standard
 import math
 from collections.abc import Callable
+from typing import Self
 
 # Third party
 import torch
@@ -10,53 +11,76 @@ from torch import Tensor, nn
 
 
 class Signal(nn.Module):
-    """Basic one-dimensional signal (FID) simulator."""
+    """
+    Basic multidimensional time-domain signal simulator.
 
+    One-dimensional signals are simulated as complex numbers, while
+    :math:`d`-dimensional signals are simulated as :math:`2^{d-1}`
+    channels of complex numbers according to States convention.
+    """
+
+    amplitudes: Tensor
     frequencies: Tensor
     decayrates: Tensor
-    amplitudes: Tensor
     phases: Tensor
 
     def __init__(
         self,
+        amplitudes: Tensor,
         frequencies: Tensor,
         decayrates: Tensor,
-        amplitudes: Tensor,
         phases: Tensor,
     ):
         """
         Initialize the simulator.
 
         Args:
-            frequencies: :math:`(k)` or `(b, k)`, Frequencies.
-            decayrates: :math:`(k)` or :math:`(b, k)`, Decay rates.
-            amplitudes: :math:`(k)` or :math:`(b, k)`, Amplitudes.
-            phases: :math:`(k)` or :math:`(b, k)`, Phase shifts.
+            amplitudes:
+                :math:`(k)` or :math:`(b, k)`,
+                Amplitude parameters.
+            frequencies:
+                :math:`(k)`, :math:`(k, d)`, :math:`(b, k)` or :math:`(b, k, d)`,
+                Frequency parameters.
+            decayrates:
+                :math:`(k)`, :math:`(k, d)`, :math:`(b, k)` or :math:`(b, k, d)`,
+                Decay rate parameters.
+            phases:
+                :math:`(k)`, :math:`(k, d)`, :math:`(b, k)` or :math:`(b, k, d)`,
+                Phase shift parameters.
         """
         super().__init__()
 
-        shapes = {
-            frequencies.shape,
-            decayrates.shape,
-            amplitudes.shape,
-            phases.shape,
-        }
-        assert len(shapes) == 1
+        assert amplitudes.ndim in (1, 2)
+        batched = amplitudes.ndim == 2
+        if batched:
+            assert frequencies.ndim in (2, 3)
+            multidim = frequencies.ndim == 3
+        else:
+            assert frequencies.ndim in (1, 2)
+            multidim = frequencies.ndim == 2
 
-        shape = shapes.pop()
-        ndim = len(shape)
-        assert ndim in (1, 2)
+        assert len({frequencies.shape, decayrates.shape, phases.shape}) == 1
+        # at this point, we know that the tensor shapes are consistent.
+        #
+        # batched=False multidim=False : ampl=(k)   freq=(k)
+        # batched=True  multidim=False : ampl=(b,k) freq=(b,k)
+        # batched=False multidim=True  : ampl=(k)   freq=(k,d)
+        # batched=True  multidim=True  : ampl=(b,k) freq=(b,k,d)
 
-        self._batched = ndim == 2
-        if self._batched:
+        if batched:
+            amplitudes = amplitudes.unsqueeze(dim=1)
             frequencies = frequencies.unsqueeze(dim=1)
             decayrates = decayrates.unsqueeze(dim=1)
-            amplitudes = amplitudes.unsqueeze(dim=1)
             phases = phases.unsqueeze(dim=1)
 
+        if multidim:
+            amplitudes = amplitudes.unsqueeze(dim=-1)
+
+        self.batched = batched
+        self.multidim = multidim
+        self.register_buffer("amplitudes", amplitudes)
         self.register_buffer("frequencies", frequencies)
         self.register_buffer("decayrates", decayrates)
-        self.register_buffer("amplitudes", amplitudes)
         self.register_buffer("phases", phases)
 
     def forward(self, t: float | Tensor, *, noise: float = 0.0) -> Tensor:
@@ -64,51 +88,97 @@ class Signal(nn.Module):
         Simulate measurement at a given time.
 
         Args:
-            t: :math:`()` or :math:`(n)`, Measurement times.
+            t: :math:`()`, :math:`(m)` or :math:`(m, d)`, Measurement times.
             noise: Noise standard deviation.
 
         Returns:
             Output values, whose shape depends on the parameter shapes.
 
-            - Unbatched: :math:`(1)` or :math:`(n)`.
-            - Batched: :math:`(b, 1)` or :math:`(b, n)`.
+            - Unbatched: :math:`(1)`, :math:`(m)` or :math:`(m, c)`.
+            - Batched: :math:`(b, 1)`, :math:`(b, m)` or :math:`(b, m, c)`.
         """
         t = 2 * math.pi * t
         if not torch.is_tensor(t):
             t = self.phases.new_full((1,), t)
 
-        if self._batched:
-            t = t.unsqueeze(dim=0)
+        if self.multidim:
+            out = self._simulate_nd(t)
+        else:
+            out = self._simulate_1d(t)
 
-        t = t.unsqueeze(dim=-1)
-
-        decay = (-self.decayrates * t).exp()
-        real = self.amplitudes * (self.frequencies * t).cos() * decay
-        imag = self.amplitudes * (self.frequencies * t).sin() * decay
-        ph = torch.complex(self.phases.cos(), self.phases.sin())
-        out = (ph * torch.complex(real, imag)).sum(dim=-1)
         return out + noise * torch.randn_like(out)
 
-    def to_dict(self) -> dict[str, list]:
-        """Return a dictionary of signal parameters."""
-        return {name: buf.squeeze().tolist() for name, buf in self.named_buffers()}
+    def _simulate_1d(self, t: Tensor) -> Tensor:
+        """
+        Simulate a one-dimensional signal.
+
+        Args:
+            t: :math:`(m)`, Input times.
+
+        Returns:
+            :math:`(m)` or :math:`(b, m)`, Output signal values.
+
+        Note:
+            When unbatched, all parameters have shape :math:`(k)`, and
+            when batched, all parameters have shape :math:`(b, 1, k)`.
+        """
+        t = t.unsqueeze(dim=-1)  # (m, 1)
+        decay = (-self.decayrates * t).exp()  # (m, k) or (b, m, k)
+        angle = self.frequencies * t + self.phases
+        real = self.amplitudes * decay * angle.cos()
+        imag = self.amplitudes * decay * angle.sin()
+        out = torch.complex(real, imag).sum(dim=-1)
+        return out
+
+    def _simulate_nd(self, t: Tensor) -> Tensor:
+        """
+        Simulate a multidimensional signal.
+
+        Args:
+            t: :math:`(m, d)`, Input times.
+
+        Returns:
+            :math:`(m, c)` or :math:`(b, m, c)`, Output signal values,
+            where :math:`c = 2^{d-1}`.
+        """
+        t = t.unsqueeze(dim=-2)  # (m, 1, d)
+        decay = (-self.decayrates * t).exp()  # (m, k, d) or (b, m, k, d)
+        angle = self.frequencies * t + self.phases
+        real = self.amplitudes * decay * angle.cos()
+        imag = self.amplitudes * decay * angle.sin()
+
+        num_dimensions = imag.size(dim=-1)
+        num_channels = 1 << num_dimensions
+        dims = torch.arange(num_dimensions, device=t.device)
+
+        out_channels = []
+        for channel in range(num_channels):
+            mask = (1 << dims) & channel
+            func = torch.where(mask.bool(), imag, real).prod(dim=-1).sum(dim=-1)
+            out_channels.append(func)
+
+        out = torch.stack(out_channels, dim=-1)
+        (out_real, out_imag) = out.unflatten(dim=-1, sizes=(-1, 2)).unbind(dim=-1)
+        return torch.complex(out_real, out_imag)
 
     @classmethod
     def build(
         cls,
+        *,
         num_components: int = 1,
         num_replicas: int = 1,
-        *,
+        num_dimensions: int = 1,
         frequencies: Callable[[int, int], Tensor],
         decayrates: Callable[[int, int], Tensor],
         amplitudes: Callable[[int, int], Tensor],
         phases: Callable[[int, int], Tensor],
-    ) -> "Signal":
+    ) -> Self:
         """
         Build a signal simulator using parameter builders functions.
 
         Args:
-            num_components: :math:`k`, Number of signal components.
+            num_dimensions: :math:`d`, Number of signal dimensions.
+            num_components: :math:`k`, Number of signal components (peaks).
             num_replicas: :math:`b`, Number of signal replicas (batch size).
             frequencies: Frequency parameter builder function.
             decayrates: Decay rate parameter builder function.
@@ -118,11 +188,22 @@ class Signal(nn.Module):
         Returns:
             Newly built signal simulator.
         """
+
+        def reshape(params: Tensor) -> Tensor:
+            return (
+                params.reshape(num_replicas, num_dimensions, num_components)
+                .permute(0, 2, 1)
+                .squeeze(dim=-1)
+                .squeeze(dim=0)
+                .contiguous()
+            )
+
+        num_copies = num_dimensions * num_replicas
         return cls(
-            frequencies=frequencies(num_components, num_replicas),
-            decayrates=decayrates(num_components, num_replicas),
-            amplitudes=amplitudes(num_components, num_replicas),
-            phases=phases(num_components, num_replicas),
+            amplitudes=amplitudes(num_components, num_replicas).squeeze(dim=0),
+            frequencies=reshape(frequencies(num_components, num_copies)),
+            decayrates=reshape(decayrates(num_components, num_copies)),
+            phases=reshape(phases(num_components, num_copies)),
         )
 
 

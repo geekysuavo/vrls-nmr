@@ -92,7 +92,7 @@ def test_random_unif(num_components, num_replicas, lower, upper):
     assert out.le(upper).all()
 
 
-def test_signal(num_components, num_replicas):
+def test_signal(num_replicas, num_components):
     signal = Signal.build(
         num_components=num_components,
         num_replicas=num_replicas,
@@ -102,16 +102,54 @@ def test_signal(num_components, num_replicas):
         phases=partial(random_normal, mean=0.0, stdev=0.001),
     )
 
+    assert signal.batched == bool(num_replicas > 1)
+    assert signal.multidim is False
+
     for t in (0, 1, 2, 3, 4, 5, 0.0, 1.1, 2.4, 3.5):
         out = signal(t)
         assert torch.is_tensor(out)
-        assert out.dtype == torch.complex64
-        assert out.shape == (num_replicas, 1)
         assert out.isfinite().all()
+        assert out.dtype == torch.complex64
+        if num_replicas == 1:
+            assert out.shape == (1,)
+        else:
+            assert out.shape == (num_replicas, 1)
 
     t = torch.arange(128)
     out = signal(t)
     assert torch.is_tensor(out)
-    assert out.dtype == torch.complex64
-    assert out.shape == (num_replicas, 128)
     assert out.isfinite().all()
+    assert out.dtype == torch.complex64
+    if num_replicas == 1:
+        assert out.shape == (128,)
+    else:
+        assert out.shape == (num_replicas, 128)
+
+
+@pytest.mark.parametrize("num_dimensions", [2, 3])
+def test_signal_nd(num_replicas, num_components, num_dimensions):
+    signal = Signal.build(
+        num_components=num_components,
+        num_replicas=num_replicas,
+        num_dimensions=num_dimensions,
+        frequencies=partial(random_unif, lower=-1.0, upper=1.0),
+        decayrates=partial(constant, value=0.01),
+        amplitudes=partial(random_chisq, dof=5, mean=1.0),
+        phases=partial(random_normal, mean=0.0, stdev=0.001),
+    )
+
+    assert signal.batched == bool(num_replicas > 1)
+    assert signal.multidim is True
+
+    ts = [torch.arange(16)] * num_dimensions
+    t = torch.cartesian_prod(*ts)
+    out = signal(t)
+    assert torch.is_tensor(out)
+    assert out.isfinite().all()
+    assert out.dtype == torch.complex64
+    num_channels = 2 ** (num_dimensions - 1)
+    num_samples = t.size(dim=0)
+    if num_replicas == 1:
+        assert out.shape == (num_samples, num_channels)
+    else:
+        assert out.shape == (num_replicas, num_samples, num_channels)
