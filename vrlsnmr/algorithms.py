@@ -266,7 +266,6 @@ def vrls_mf(
     n: int,
     niter: int,
     eps: float = 1.0e-9,
-    full_var: bool = False,
     warm_start: bool | Tensor = False,
 ) -> AlgorithmReturnType:
     """
@@ -280,8 +279,6 @@ def vrls_mf(
         n: Sparse dimension size.
         niter: Number of iterations.
         eps: Weight update positivity parameter.
-        full_var: When true, recompute marginal variances using the final
-            mean-field weights and a full :func:`vrls` kernel matrix.
         warm_start: Optional initial weights, or whether to return final weights.
 
     Returns:
@@ -335,15 +332,7 @@ def vrls_mf(
         gamma = (tau * AtA_diag + w).reciprocal()
 
     yhat = torch.fft.ifft(mu, norm="ortho")
-
-    if full_var:
-        tau_batched = w.new_full((bs,), tau)
-        K = op.kernel(w, tau_batched, ids)
-        Kinv = torch.linalg.inv(K)
-        gamma = op.xmarginal(Kinv, w, ids)
-        sigma = op.ymarginal(Kinv, w, ids)
-    else:
-        sigma = gamma.mean(dim=1, keepdim=True).expand_as(yhat)
+    sigma = gamma.mean(dim=1, keepdim=True).expand_as(yhat)
 
     if return_weights:
         return (mu, gamma, yhat, sigma, w)
