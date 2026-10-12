@@ -41,10 +41,21 @@ def test_format_conversion(shape):
     torch.testing.assert_close(y_norm, z_norm)
 
 
+@pytest.mark.parametrize("grid_size", [8, 16])
+def test_fftn_1d(batch_size, grid_size):
+    y = randn_complex(batch_size, grid_size)
+    y_fft = mx.fftn(y, inverse=False)
+    y_new = mx.fftn(y_fft, inverse=True)
+
+    torch.testing.assert_close(y, y_new)
+    assert y_fft.shape == y.shape
+
+
 @pytest.mark.parametrize("states", [False, True])
-def test_fftn(shape, states):
+def test_fftn_nd(shape, states):
     y = randn_complex(*shape)
     y_fft = mx.fftn(y, inverse=False, states=states)
     y_new = mx.fftn(y_fft, inverse=True, states=states)
 
     torch.testing.assert_close(y, y_new)
+    assert y_fft.shape == y.shape

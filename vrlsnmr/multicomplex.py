@@ -1,5 +1,5 @@
 r"""
-Multicomplex utility functions for multidimensional NUS NMR algorithms.
+Utility functions for multicomplex multidimensional NUS NMR algorithms.
 
 Algorithms in :mod:`vrlsnmr` assume a uniformly sampled direct dimension
 and :math:`d` nonuniformly sampled indirect dimensions, where measurements
@@ -42,6 +42,19 @@ import torch
 from torch import Tensor
 
 
+def expand(data: Tensor) -> Tensor:
+    r"""
+    Unsqueeze a tensor to contain a channel dimension.
+
+    Args:
+        data: :math:`(b, \dots)`, Input tensor.
+
+    Returns:
+        :math:`(b, 1, \dots)`, Output tensor with an inserted channel dimension.
+    """
+    return data.unsqueeze(dim=1)
+
+
 def to_complex(y: Tensor) -> Tensor:
     r"""
     Convert States-convention multicomplex components into complex channels.
@@ -76,14 +89,25 @@ def fftn(data: Tensor, *, inverse: bool = False, states: bool = False) -> Tensor
     Multidimensional fast Fourier transform (FFT).
 
     Args:
-        data: :math:`(b, c, n_1, \dots, n_d)`, Input data.
+        data: :math:`(b, n)` or :math:`(b, c, n_1, \dots, n_d)`, Input data.
         inverse: When true, return the inverse transform.
         states: When true, the data are accepted and returned in States format.
             Otherwise, they are accepted in returned in complex channel format.
 
     Returns:
-        :math:`(b, c, n_1, \dots, n_d)`, Transformed data.
+        :math:`(b, n)` or :math:`(b, c, n_1, \dots, n_d)`, Transformed data.
+
+    Note:
+        One-dimensional data are handled using a standard fast Fourier transform,
+        ignoring the value of :attr:`states`, as they contain a single channel of
+        complex values.
     """
+    if data.ndim <= 2:
+        if inverse:
+            return torch.fft.ifft(data, norm="ortho")
+        else:
+            return torch.fft.fft(data, norm="ortho")
+
     if states:
         return to_states(fftn(to_complex(data), inverse=inverse))
 
