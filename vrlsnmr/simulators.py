@@ -17,6 +17,7 @@ class Signal(nn.Module):
     One-dimensional signals are simulated as complex numbers, while
     :math:`d`-dimensional signals are simulated as :math:`2^{d-1}`
     channels of complex numbers according to States convention.
+    See :mod:`vrlsnmr.multicomplex` for more details.
     """
 
     amplitudes: Tensor
