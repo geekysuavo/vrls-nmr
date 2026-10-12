@@ -43,7 +43,6 @@ def test_format_conversion(shape):
 
 @pytest.mark.parametrize("states", [False, True])
 def test_fftn(shape, states):
-    print(shape)
     y = randn_complex(*shape)
     y_fft = mx.fftn(y, inverse=False, states=states)
     y_new = mx.fftn(y_fft, inverse=True, states=states)
