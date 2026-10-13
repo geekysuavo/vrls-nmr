@@ -167,6 +167,7 @@ class Signal(nn.Module):
         num_components: int = 1,
         num_replicas: int = 1,
         num_dimensions: int = 1,
+        with_direct_dimension: bool = False,
         frequencies: Callable[[int, int], Tensor],
         decayrates: Callable[[int, int], Tensor],
         amplitudes: Callable[[int, int], Tensor],
@@ -176,9 +177,12 @@ class Signal(nn.Module):
         Build a signal simulator using parameter builders functions.
 
         Args:
-            num_dimensions: :math:`d`, Number of signal dimensions.
             num_components: :math:`k`, Number of signal components (peaks).
             num_replicas: :math:`b`, Number of signal replicas (batch size).
+            num_dimensions: :math:`d`, Number of signal dimensions.
+            with_direct_dimension: When true, the :math:`b` replicas will be
+                structured to contain the Fourier transform of a simulated
+                direct data dimension.
             frequencies: Frequency parameter builder function.
             decayrates: Decay rate parameter builder function.
             amplitudes: Amplitude parameter builder function.
@@ -187,6 +191,12 @@ class Signal(nn.Module):
         Returns:
             Newly built signal simulator.
         """
+        assert num_dimensions >= 1
+        assert num_components >= 1
+        assert num_replicas >= 1
+        if with_direct_dimension:
+            assert num_replicas > 1
+            (num_direct, num_replicas) = (num_replicas, 1)
 
         def reshape(params: Tensor) -> Tensor:
             return (
@@ -198,12 +208,38 @@ class Signal(nn.Module):
             )
 
         num_copies = num_dimensions * num_replicas
-        return cls(
-            amplitudes=amplitudes(num_components, num_replicas).squeeze(dim=0),
-            frequencies=reshape(frequencies(num_components, num_copies)),
-            decayrates=reshape(decayrates(num_components, num_copies)),
-            phases=reshape(phases(num_components, num_copies)),
-        )
+        amplitude_params = amplitudes(num_components, num_replicas).squeeze(dim=0)
+        frequency_params = reshape(frequencies(num_components, num_copies))
+        decay_params = reshape(decayrates(num_components, num_copies))
+        phase_params = reshape(phases(num_components, num_copies))
+
+        if with_direct_dimension:
+            direct_signal = cls(
+                amplitudes=constant(num_components, 1, value=1.0).squeeze(dim=0),
+                frequencies=frequencies(num_components, 1).squeeze(dim=0),
+                decayrates=decayrates(num_components, 1).squeeze(dim=0),
+                phases=phases(num_components, 1).squeeze(dim=0),
+            )
+            y = direct_signal(torch.arange(num_direct))
+            yft = torch.fft.fft(y, norm="ortho")
+
+            linear_ndim = amplitude_params.ndim
+            nonlin_ndim = frequency_params.ndim
+            linear_shape = tuple([-1] * linear_ndim)
+            nonlin_shape = tuple([-1] * nonlin_ndim)
+
+            amplitude_params = amplitude_params.expand(1, *linear_shape)
+            frequency_params = frequency_params.expand(num_direct, *nonlin_shape)
+            decay_params = decay_params.expand(num_direct, *nonlin_shape)
+            phase_params = phase_params.expand(1, *nonlin_shape)
+
+            direct_amplitudes = yft.abs().view(-1, *([1] * linear_ndim))
+            direct_phases = yft.angle().view(-1, *([1] * nonlin_ndim))
+
+            amplitude_params = amplitude_params * direct_amplitudes
+            phase_params = phase_params + direct_phases
+
+        return cls(amplitude_params, frequency_params, decay_params, phase_params)
 
 
 def constant(n: int, bs: int, *, value: float) -> Tensor:

@@ -92,10 +92,12 @@ def test_random_unif(num_components, num_replicas, lower, upper):
     assert out.le(upper).all()
 
 
-def test_signal(num_replicas, num_components):
+@pytest.mark.parametrize("with_direct", [False, True])
+def test_signal(num_replicas, num_components, with_direct):
     signal = Signal.build(
         num_components=num_components,
         num_replicas=num_replicas,
+        with_direct_dimension=with_direct and num_replicas > 1,
         frequencies=partial(random_unif, lower=-1.0, upper=1.0),
         decayrates=partial(constant, value=0.01),
         amplitudes=partial(random_chisq, dof=5, mean=1.0),
@@ -126,12 +128,14 @@ def test_signal(num_replicas, num_components):
         assert out.shape == (num_replicas, 128)
 
 
+@pytest.mark.parametrize("with_direct", [False, True])
 @pytest.mark.parametrize("num_dimensions", [2, 3])
-def test_signal_nd(num_replicas, num_components, num_dimensions):
+def test_signal_nd(num_replicas, num_components, num_dimensions, with_direct):
     signal = Signal.build(
         num_components=num_components,
         num_replicas=num_replicas,
         num_dimensions=num_dimensions,
+        with_direct_dimension=with_direct and num_replicas > 1,
         frequencies=partial(random_unif, lower=-1.0, upper=1.0),
         decayrates=partial(constant, value=0.01),
         amplitudes=partial(random_chisq, dof=5, mean=1.0),
