@@ -8,7 +8,20 @@ import torch
 from torch import Tensor
 
 
-def ravel_ids(ids: Tensor, shape: tuple[int, ...]) -> Tensor:
+def is_multidim(shape: int | tuple[int, ...]) -> bool:
+    """
+    Return whether a shape is multidimensional.
+
+    Args:
+        shape: Number of grid points, or grid shape.
+
+    Returns:
+        Whether :attr:`shape` is multidimensional.
+    """
+    return isinstance(shape, tuple) and len(shape) > 1
+
+
+def ravel_ids(ids: Tensor, shape: int | tuple[int, ...]) -> Tensor:
     """
     Convert multidimensional grid indices into flattened indices.
 
@@ -19,7 +32,9 @@ def ravel_ids(ids: Tensor, shape: tuple[int, ...]) -> Tensor:
     Returns:
         :math:`(m)`, Flattened indices.
     """
-    if len(shape) == 1:
+    if is_multidim(shape):
+        assert isinstance(shape, tuple)
+    else:
         return ids
 
     flat_ids = ids.new_zeros(ids.size(dim=0))
@@ -41,13 +56,13 @@ def unravel_ids(flat_ids: Tensor, shape: tuple[int, ...]) -> Tensor:
     Returns:
         :math:`(m, d)`, Multidimensional indices.
     """
-    if len(shape) == 1:
-        return flat_ids
-    else:
+    if is_multidim(shape):
         return torch.stack(torch.unravel_index(flat_ids, shape), dim=-1)
+    else:
+        return flat_ids
 
 
-def scatter(data: Tensor, flat_ids: Tensor, shape: tuple[int, ...]) -> Tensor:
+def scatter(data: Tensor, flat_ids: Tensor, shape: int | tuple[int, ...]) -> Tensor:
     r"""
     Expand sequentially packed values into a zero-filled multidimensional grid.
 
@@ -59,15 +74,16 @@ def scatter(data: Tensor, flat_ids: Tensor, shape: tuple[int, ...]) -> Tensor:
     Returns:
         :math:`(\dots, n_1, \dots, n_d)`, Zero-filled multidimensional data.
     """
+    grid_shape = shape if isinstance(shape, tuple) else (shape,)
     (*prefix_shape, _) = data.shape
-    out_shape = (*prefix_shape, *shape)
-    num_grid_elements = math.prod(shape)
+    out_shape = (*prefix_shape, *grid_shape)
+    num_grid_elements = math.prod(grid_shape)
     out = data.new_zeros((*prefix_shape, num_grid_elements))
     out[..., flat_ids] = data
     return out.view(out_shape)
 
 
-def gather(data: Tensor, flat_ids: Tensor, shape: tuple[int, ...]) -> Tensor:
+def gather(data: Tensor, flat_ids: Tensor, shape: int | tuple[int, ...]) -> Tensor:
     r"""
     Collect sequentially packed values from a multidimensional grid.
 
@@ -79,5 +95,6 @@ def gather(data: Tensor, flat_ids: Tensor, shape: tuple[int, ...]) -> Tensor:
     Returns:
         :math:`(\dots, m)`, Sequentially packed data.
     """
-    start_dim = data.ndim - len(shape)
+    grid_ndim = len(shape) if isinstance(shape, tuple) else 1
+    start_dim = data.ndim - grid_ndim
     return data.flatten(start_dim).index_select(dim=-1, index=flat_ids)
