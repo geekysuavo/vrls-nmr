@@ -42,6 +42,19 @@ import torch
 from torch import Tensor
 
 
+def channels(num_grid_dims: int) -> int:
+    """
+    Number of complex channels required to store multicomplex data.
+
+    Args:
+        num_grid_dims: :math:`d`, Number of grid dimensions.
+
+    Returns:
+        :math:`2^{d-1}`, Number of complex channels.
+    """
+    return 1 << (num_grid_dims - 1)
+
+
 def expand(data: Tensor) -> Tensor:
     r"""
     Unsqueeze a tensor to contain a channel dimension.

@@ -26,6 +26,14 @@ def shape(batch_size, grid_shape) -> tuple[int, ...]:
     return (batch_size, num_channels, *grid_shape)
 
 
+@pytest.mark.parametrize(
+    ("num_grid_dims", "num_channels"),
+    [(1, 1), (2, 2), (3, 4), (4, 8)],
+)
+def test_channels(num_grid_dims, num_channels):
+    assert mx.channels(num_grid_dims) == num_channels
+
+
 def test_format_conversion(shape):
     y = randn_complex(*shape)
     z = mx.to_complex(y)
