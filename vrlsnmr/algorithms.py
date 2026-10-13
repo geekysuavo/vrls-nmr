@@ -6,6 +6,7 @@ from torch import Tensor
 
 # VRLS
 import vrlsnmr.multicomplex as mx
+import vrlsnmr.multidim as md
 import vrlsnmr.operators as op
 from vrlsnmr.types import (
     AlgorithmFunc,
@@ -145,6 +146,7 @@ def vrls(
 
     bs = y.size(dim=0)
 
+    flat_ids = md.ravel_ids(ids, shape=n)
     mu = torch.zeros((bs, n), dtype=complex_dtype, device=device)
     tau_batched = torch.full((bs,), tau, dtype=real_dtype, device=device)
 
@@ -159,8 +161,8 @@ def vrls(
         K = op.kernel(w, tau_batched, ids)
         Kinv = torch.linalg.inv(K)
 
-        mu.mul_(0)
-        mu[:, ids] = (Kinv @ y.unsqueeze(dim=-1)).squeeze(dim=-1)
+        mu = (Kinv @ y.unsqueeze(dim=-1)).squeeze(dim=-1)
+        mu = md.scatter(mu, flat_ids, n)
         mu = mx.fftn(mu) / mx.expand(w)
 
         gamma_diag = op.xmarginal(Kinv, w, ids)
@@ -220,6 +222,7 @@ def vrls_ex(
 
     bs = y.size(dim=0)
 
+    flat_ids = md.ravel_ids(ids, shape=n)
     mu = torch.zeros((bs, n), dtype=complex_dtype, device=device)
     nu_tau = torch.ones((bs,), dtype=real_dtype, device=device)
     nu_xi = torch.ones((bs,), dtype=real_dtype, device=device)
@@ -235,8 +238,8 @@ def vrls_ex(
         K = op.kernel(nu_w, nu_tau, ids)
         Kinv = torch.linalg.inv(K)
 
-        mu.mul_(0)
-        mu[:, ids] = (Kinv @ y.unsqueeze(dim=-1)).squeeze(dim=-1)
+        mu = (Kinv @ y.unsqueeze(dim=-1)).squeeze(dim=-1)
+        mu = md.scatter(mu, flat_ids, n)
         mu = mx.fftn(mu) / mx.expand(nu_w)
 
         gamma_diag = op.xmarginal(Kinv, nu_w, ids)
@@ -301,6 +304,7 @@ def vrls_mf(
 
     (bs, m) = y.shape
 
+    flat_ids = md.ravel_ids(ids, shape=n)
     mu = torch.zeros((bs, n), dtype=complex_dtype, device=device)
     gamma = torch.ones((bs, n), dtype=real_dtype, device=device)
 
@@ -311,9 +315,6 @@ def vrls_mf(
         w = torch.ones((bs, n), dtype=real_dtype, device=device)
         return_weights = warm_start
 
-    mask = torch.zeros((n,), dtype=torch.bool, device=device)
-    mask[ids] = True
-
     AtA_diag = m / n
     L = 1
 
@@ -322,8 +323,8 @@ def vrls_mf(
         w = (xi / (m2 + eps)).sqrt()
 
         delta = mx.fftn(mu, inverse=True)
-        delta[:, ~mask] = 0
-        delta[:, mask] -= y
+        delta = md.gather(delta, flat_ids, n) - y
+        delta = md.scatter(delta, flat_ids, n)
         delta = mx.fftn(delta)
         delta = (L / 2) * mu - delta
 
@@ -332,7 +333,7 @@ def vrls_mf(
 
         gamma = (tau * AtA_diag + w).reciprocal()
 
-    yhat = torch.fft.ifft(mu, norm="ortho")
+    yhat = mx.fftn(mu, inverse=True)
     sigma = gamma.mean(dim=1, keepdim=True).expand_as(yhat)
 
     if return_weights:
@@ -373,15 +374,14 @@ def ists(
 
     (bs, _) = y.shape
 
+    flat_ids = md.ravel_ids(ids, shape=n)
     xhat = torch.zeros((bs, n), dtype=complex_dtype, device=device)
     yhat = torch.zeros((bs, n), dtype=complex_dtype, device=device)
     delta = torch.zeros((bs, n), dtype=complex_dtype, device=device)
 
-    mask = torch.zeros((n,), dtype=torch.bool, device=device)
-    mask[ids] = True
-
     for it in range(niter):
-        delta[:, mask] = y - yhat[:, mask]
+        delta = y - md.gather(yhat, flat_ids, n)
+        delta = md.scatter(delta, flat_ids, n)
         xhat += mx.fftn(delta)
 
         if it == 0:
