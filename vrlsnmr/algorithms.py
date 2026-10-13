@@ -5,6 +5,7 @@ import torch
 from torch import Tensor
 
 # VRLS
+import vrlsnmr.multicomplex as mx
 import vrlsnmr.operators as op
 from vrlsnmr.types import (
     AlgorithmFunc,
@@ -160,14 +161,14 @@ def vrls(
 
         mu.mul_(0)
         mu[:, ids] = (Kinv @ y.unsqueeze(dim=-1)).squeeze(dim=-1)
-        mu = torch.fft.fft(mu, norm="ortho") / w
+        mu = mx.fftn(mu) / mx.expand(w)
 
         gamma_diag = op.xmarginal(Kinv, w, ids)
 
         m2 = mu.abs().square() + gamma_diag
         w = (xi / (m2 + eps)).sqrt()
 
-    yhat = torch.fft.ifft(mu, norm="ortho")
+    yhat = mx.fftn(mu, inverse=True)
     sigma_diag = op.ymarginal(Kinv, w, ids)
 
     if return_weights:
@@ -236,7 +237,7 @@ def vrls_ex(
 
         mu.mul_(0)
         mu[:, ids] = (Kinv @ y.unsqueeze(dim=-1)).squeeze(dim=-1)
-        mu = torch.fft.fft(mu, norm="ortho") / nu_w
+        mu = mx.fftn(mu) / mx.expand(nu_w)
 
         gamma_diag = op.xmarginal(Kinv, nu_w, ids)
         sigma_diag = op.ymarginal(Kinv, nu_w, ids)
@@ -246,7 +247,7 @@ def vrls_ex(
 
         nu_xi = (beta_xi / nu_w.reciprocal().sum(dim=-1)).sqrt()
 
-        yhat = torch.fft.ifft(mu, norm="ortho")
+        yhat = mx.fftn(mu, inverse=True)
         err = (y - yhat[:, ids]).abs().square().sum(dim=-1)
         ess = err + sigma_diag[:, ids].sum(dim=-1) / n
         nu_tau = (beta_tau / ess).sqrt()
@@ -320,10 +321,10 @@ def vrls_mf(
         m2 = mu.abs().square() + gamma
         w = (xi / (m2 + eps)).sqrt()
 
-        delta = torch.fft.ifft(mu, norm="ortho")
+        delta = mx.fftn(mu, inverse=True)
         delta[:, ~mask] = 0
         delta[:, mask] -= y
-        delta = torch.fft.fft(delta, norm="ortho")
+        delta = mx.fftn(delta)
         delta = (L / 2) * mu - delta
 
         D_diag = tau / 2 + w
@@ -381,7 +382,7 @@ def ists(
 
     for it in range(niter):
         delta[:, mask] = y - yhat[:, mask]
-        xhat += torch.fft.fft(delta, norm="ortho")
+        xhat += mx.fftn(delta)
 
         if it == 0:
             thresh = xhat.abs().max(dim=1, keepdim=True).values
@@ -393,7 +394,7 @@ def ists(
             xhat * (1 - thresh / xhat_abs),
         )
 
-        yhat = torch.fft.ifft(xhat, norm="ortho")
+        yhat = mx.fftn(xhat, inverse=True)
         thresh *= mu
 
     return (xhat, yhat)

@@ -51,8 +51,15 @@ def expand(data: Tensor) -> Tensor:
 
     Returns:
         :math:`(b, 1, \dots)`, Output tensor with an inserted channel dimension.
+
+    Note:
+        Input tensors with two or fewer dimensions are assumed to contain
+        one-dimensional data and returned without modification.
     """
-    return data.unsqueeze(dim=1)
+    if data.ndim > 2:
+        return data.unsqueeze(dim=1)
+    else:
+        return data
 
 
 def to_complex(y: Tensor) -> Tensor:
