@@ -154,6 +154,6 @@ def test_signal_nd(num_replicas, num_components, num_dimensions, with_direct):
     num_channels = 2 ** (num_dimensions - 1)
     num_samples = t.size(dim=0)
     if num_replicas == 1:
-        assert out.shape == (num_samples, num_channels)
+        assert out.shape == (num_channels, num_samples)
     else:
-        assert out.shape == (num_replicas, num_samples, num_channels)
+        assert out.shape == (num_replicas, num_channels, num_samples)

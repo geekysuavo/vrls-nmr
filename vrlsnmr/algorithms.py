@@ -347,47 +347,51 @@ def ists(
     y: Tensor,
     ids: Tensor,
     mu: float,
-    n: int,
+    n: int | tuple[int, ...],
     niter: int,
 ) -> PointEstimatorReturnType:
-    """
+    r"""
     Iterative Soft Thresholding (IST-S).
 
     Args:
-        y: :math:`(m)` or :math:`(b, m)`, Measurements (complex).
-        ids: :math:`(m)`, Measurement indices.
+        y: :math:`(m)`, :math:`(c, m)`, :math:`(b, m)` or :math:`(b, c, m)`,
+            Measurements (complex or multicomplex).
+        ids: :math:`(m)` or :math:`(m, d)`, Measurement indices.
         mu: Thresholding factor.
-        n: Sparse dimension size.
+        n: Sparse dimension size or shape.
         niter: Number of iterations.
 
     Returns:
         A :class:`tuple` containing
 
-        - :math:`(b, n)`, Frequency-domain point estimate (complex).
-        - :math:`(b, n)`, Time-domain point estimate (complex).
+        - :math:`(b, n)` or :math:`(b, c, n_1, \dots, n_d)`,
+          Frequency-domain point estimate (complex or multicomplex).
+        - :math:`(b, n)` or :math:`(b, c, n_1, \dots, n_d)`,
+          Time-domain point estimate (complex or multicomplex).
     """
     device = y.device
     complex_dtype = y.dtype
 
-    if y.ndim == 1:
-        y = y.unsqueeze(dim=0)
-
-    (bs, _) = y.shape
-
-    flat_ids = md.ravel_ids(ids, shape=n)
-    xhat = torch.zeros((bs, n), dtype=complex_dtype, device=device)
-    yhat = torch.zeros((bs, n), dtype=complex_dtype, device=device)
-    delta = torch.zeros((bs, n), dtype=complex_dtype, device=device)
+    (y, flat_ids, shape, grid, bs, multidim) = _prepare(y, ids, n)
+    xhat = torch.zeros(shape, dtype=complex_dtype, device=device)
+    yhat = torch.zeros(shape, dtype=complex_dtype, device=device)
+    delta = torch.zeros(shape, dtype=complex_dtype, device=device)
 
     for it in range(niter):
         delta = y - md.gather(yhat, flat_ids, n)
         delta = md.scatter(delta, flat_ids, n)
         xhat += mx.fftn(delta)
 
-        if it == 0:
-            thresh = xhat.abs().max(dim=1, keepdim=True).values
+        if multidim:
+            xhat_abs = xhat.abs().square().sum(dim=1, keepdim=True).sqrt()
+        else:
+            xhat_abs = xhat.abs()
 
-        xhat_abs = xhat.abs()
+        if it == 0:
+            thresh = xhat_abs.flatten(start_dim=1).max(dim=1, keepdim=True).values
+            if multidim:
+                thresh = thresh.view(bs, 1, *([1] * len(grid)))
+
         xhat = torch.where(
             xhat_abs <= thresh,
             0.0,
@@ -397,4 +401,46 @@ def ists(
         yhat = mx.fftn(xhat, inverse=True)
         thresh *= mu
 
+    if multidim:
+        xhat = mx.to_states(xhat)
+        yhat = mx.to_states(yhat)
+
     return (xhat, yhat)
+
+
+def _prepare(
+    y: Tensor,
+    ids: Tensor,
+    n: int | tuple[int, ...],
+) -> tuple[Tensor, Tensor, tuple[int, ...], tuple[int, ...], int, bool]:
+    """
+    Prepare data for reconstruction.
+
+    Args:
+        y: Optionally batched measurements.
+        ids: Measurement indices.
+        n: Grid size or shape.
+
+    Returns:
+        A :class:`tuple` containing
+
+        - Batched measurements.
+        - Flattened indices.
+        - Full tensor shape.
+        - Grid tensor subshape.
+        - Batch size.
+        - True when multidimensional.
+    """
+    multidim = md.is_multidim(n)
+    if (multidim and y.ndim == 2) or (not multidim and y.ndim == 1):
+        y = y.unsqueeze(dim=0)
+
+    bs = y.size(dim=0)
+    flat_ids = md.ravel_ids(ids, n)
+    grid = n if isinstance(n, tuple) else (n,)
+    if multidim:
+        shape = (bs, mx.channels(len(grid)), *grid)
+    else:
+        shape = (bs, *grid)
+
+    return (y, flat_ids, shape, grid, bs, multidim)

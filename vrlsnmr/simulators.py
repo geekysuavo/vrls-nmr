@@ -86,8 +86,8 @@ class Signal(nn.Module):
         Returns:
             Output values, whose shape depends on the parameter shapes.
 
-            - Unbatched: :math:`(1)`, :math:`(m)` or :math:`(m, c)`.
-            - Batched: :math:`(b, 1)`, :math:`(b, m)` or :math:`(b, m, c)`.
+            - Unbatched: :math:`(1)`, :math:`(m)` or :math:`(c, m)`.
+            - Batched: :math:`(b, 1)`, :math:`(b, m)` or :math:`(b, c, m)`.
         """
         t = 2 * math.pi * t
         if not torch.is_tensor(t):
@@ -130,7 +130,7 @@ class Signal(nn.Module):
             t: :math:`(m, d)`, Input times.
 
         Returns:
-            :math:`(m, c)` or :math:`(b, m, c)`, Output signal values,
+            :math:`(c, m)` or :math:`(b, c, m)`, Output signal values,
             where :math:`c = 2^{d-1}`.
 
         Note:
@@ -158,7 +158,7 @@ class Signal(nn.Module):
 
         out = torch.stack(out_channels, dim=-1)
         (out_real, out_imag) = out.unflatten(dim=-1, sizes=(-1, 2)).unbind(dim=-1)
-        return torch.complex(out_real, out_imag)
+        return torch.complex(out_real, out_imag).transpose(-1, -2)
 
     @classmethod
     def build(
