@@ -75,6 +75,36 @@ def expand(data: Tensor) -> Tensor:
         return data
 
 
+def abs(  # noqa: A001
+    data: Tensor,
+    *,
+    square: bool = False,
+    keepdim: bool = False,
+) -> Tensor:
+    r"""
+    Compute the magnitude of multicomplex data.
+
+    Args:
+        data: :math:`(b, n)` or :math:`(b, c, n_1, \dots, n_d)`, Input data.
+        square: When true, return the squared magnitude.
+        keepdim: When true, keep the channel dimesnion for multicomplex data.
+
+    Returns:
+        Output data with shape :math:`(b, n)` or :math:`(b, n_1, \dots, n_d)`,
+        or :math:`(b, 1, n_1, \dots, n_d)` if :attr:`keepdim` is true.
+    """
+    if data.ndim > 2:
+        if square:
+            return data.abs().square().sum(dim=1, keepdim=keepdim)
+        else:
+            return data.abs().square().sum(dim=1, keepdim=keepdim).sqrt()
+    else:
+        if square:
+            return data.abs().square()
+        else:
+            return data.abs()
+
+
 def to_complex(y: Tensor) -> Tensor:
     r"""
     Convert States-convention multicomplex components into complex channels.
