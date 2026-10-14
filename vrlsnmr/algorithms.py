@@ -1,5 +1,8 @@
 """Sampling and reconstruction algorithms."""
 
+# Standard
+import math
+
 # Third party
 import torch
 from torch import Tensor
@@ -267,20 +270,21 @@ def vrls_mf(
     ids: Tensor,
     tau: float,
     xi: float,
-    n: int,
+    n: int | tuple[int, ...],
     niter: int,
     eps: float = 1.0e-9,
     warm_start: bool | Tensor = False,
 ) -> AlgorithmReturnType:
-    """
+    r"""
     Fast mean-field VRLS.
 
     Args:
-        y: :math:`(m)` or :math:`(b, m)`, Measurements (complex).
-        ids: :math:`(m)`, Measurement indices.
+        y: :math:`(m)`, :math:`(c, m)`, :math:`(b, m)` or :math:`(b, c, m)`,
+            Measurements (complex or multicomplex).
+        ids: :math:`(m)` or :math:`(m, d)`, Measurement indices.
         tau: Fixed noise precision.
         xi: Fixed weight scale.
-        n: Sparse dimension size.
+        n: Sparse dimension size or shape.
         niter: Number of iterations.
         eps: Weight update positivity parameter.
         warm_start: Optional initial weights, or whether to return final weights.
@@ -288,38 +292,38 @@ def vrls_mf(
     Returns:
         A :class:`tuple` containing
 
-        - :math:`(b, n)`, Frequency-domain mean (complex).
-        - :math:`(b, n)`, Frequency-domain variance (real, positive).
-        - :math:`(b, n)`, Time-domain mean (complex).
-        - :math:`(b, n)`, Time-domain variance (real, positive).
-        - :math:`(b, n)`, Frequency-domain weights (real, positive), only returned
+        - :math:`(b, n)` or :math:`(b, c, n_1, \dots, n_d)`,
+          Frequency-domain mean (complex or multicomplex).
+        - :math:`(b, n)` or :math:`(b, n_1, \dots, n_d)`,
+          Frequency-domain variance (real, positive).
+        - :math:`(b, n)` or :math:`(b, c, n_1, \dots, n_d)`,
+          Time-domain mean (complex or multicomplex).
+        - :math:`(b, n)` or :math:`(b, n_1, \dots, n_d)`,
+          Time-domain variance (real, positive).
+        - :math:`(b, n)` or :math:`(b, n_1, \dots, n_d)`,
+          Frequency-domain weights (real, positive), only returned
           when :attr:`warm_start` is true or a tensor.
     """
     device = y.device
     complex_dtype = y.dtype
     real_dtype = y.dtype.to_real()
 
-    if y.ndim == 1:
-        y = y.unsqueeze(dim=0)
-
-    (bs, m) = y.shape
-
-    flat_ids = md.ravel_ids(ids, shape=n)
-    mu = torch.zeros((bs, n), dtype=complex_dtype, device=device)
-    gamma = torch.ones((bs, n), dtype=real_dtype, device=device)
+    (y, flat_ids, shape, grid, bs, multidim) = _prepare(y, ids, n)
+    mu = torch.zeros(shape, dtype=complex_dtype, device=device)
+    gamma = torch.ones((bs, *grid), dtype=real_dtype, device=device)
 
     if torch.is_tensor(warm_start):
         w = warm_start
         return_weights = True
     else:
-        w = torch.ones((bs, n), dtype=real_dtype, device=device)
+        w = torch.ones((bs, *grid), dtype=real_dtype, device=device)
         return_weights = warm_start
 
-    AtA_diag = m / n
+    AtA_diag = y.size(dim=-1) / math.prod(grid)  # m / n
     L = 1
 
     for _ in range(niter):
-        m2 = mu.abs().square() + gamma
+        m2 = mx.abs(mu, square=True) + gamma
         w = (xi / (m2 + eps)).sqrt()
 
         delta = mx.fftn(mu, inverse=True)
@@ -328,13 +332,18 @@ def vrls_mf(
         delta = mx.fftn(delta)
         delta = (L / 2) * mu - delta
 
-        D_diag = tau / 2 + w
+        D_diag = mx.expand(tau / 2 + w)
         mu = tau * D_diag.reciprocal() * delta
 
         gamma = (tau * AtA_diag + w).reciprocal()
 
     yhat = mx.fftn(mu, inverse=True)
-    sigma = gamma.mean(dim=1, keepdim=True).expand_as(yhat)
+    grid_dims = tuple(range(1, gamma.ndim))
+    sigma = gamma.mean(dim=grid_dims, keepdim=True).expand_as(gamma)
+
+    if multidim:
+        mu = mx.to_states(mu)
+        yhat = mx.to_states(yhat)
 
     if return_weights:
         return (mu, gamma, yhat, sigma, w)
@@ -382,11 +391,7 @@ def ists(
         delta = md.scatter(delta, flat_ids, n)
         xhat += mx.fftn(delta)
 
-        if multidim:
-            xhat_abs = xhat.abs().square().sum(dim=1, keepdim=True).sqrt()
-        else:
-            xhat_abs = xhat.abs()
-
+        xhat_abs = mx.abs(xhat, keepdim=True)
         if it == 0:
             thresh = xhat_abs.flatten(start_dim=1).max(dim=1, keepdim=True).values
             if multidim:
