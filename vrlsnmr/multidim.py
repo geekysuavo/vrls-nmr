@@ -57,7 +57,8 @@ def unravel_ids(flat_ids: Tensor, shape: tuple[int, ...]) -> Tensor:
         :math:`(m, d)`, Multidimensional indices.
     """
     if is_multidim(shape):
-        return torch.stack(torch.unravel_index(flat_ids, shape), dim=-1)
+        ids = torch.stack(torch.unravel_index(flat_ids, shape), dim=-1)
+        return ids.to(flat_ids.dtype)
     else:
         return flat_ids
 

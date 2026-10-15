@@ -67,62 +67,9 @@ def ymarginal(kernel_inv: Tensor, weights: Tensor, ids: Tensor) -> Tensor:
         raise NotImplementedError
 
 
-def schedunif(
-    m: int,
-    n: int | tuple[int, ...],
-    dtype: torch.dtype = _default_dtype,
-    device: torch.device = _default_device,
-) -> Tensor:
-    """
-    Generate a uniform sampling schedule.
-
-    Args:
-        m: Number of grid points to sample.
-        n: Total number of grid points, or grid shape.
-        dtype: The desired data type of the returned tensor.
-        device: The desired device of the returned tensor.
-
-    Returns:
-        :math:`(m)` or :math:`(m, d)`, Indices to sample.
-    """
-    if isinstance(n, int):
-        perm = torch.randperm(n, dtype=dtype, device=device)
-        return perm.narrow(dim=0, start=0, length=m)
-    else:
-        raise NotImplementedError
-
-
-def schedexp(
-    rate: float,
-    m: int,
-    n: int | tuple[int, ...],
-    dtype: torch.dtype = _default_dtype,
-    device: torch.device = _default_device,
-) -> Tensor:
-    """
-    Generate an exponentially biased sampling schedule.
-
-    Args:
-        rate: Exponential biasing rate.
-        m: Number of grid points to sample.
-        n: Total number of grid points, or grid shape.
-        dtype: The desired data type of the returned tensor.
-        device: The desired device of the returned tensor.
-
-    Returns:
-        :math:`(m)` or :math:`(m, d)`, Indices to sample.
-    """
-    if isinstance(n, int):
-        ids = torch.full((m,), fill_value=-1, dtype=dtype)
-        torch.ops.vrlsnmr.schedexp(rate, n, ids)
-        return ids.to(device)
-    else:
-        raise NotImplementedError
-
-
 def schedpg(
     m: int,
-    n: int | tuple[int, ...],
+    n: int,
     dtype: torch.dtype = _default_dtype,
     device: torch.device = _default_device,
 ) -> Tensor:
@@ -131,16 +78,13 @@ def schedpg(
 
     Args:
         m: Number of grid points to sample.
-        n: Total number of grid points, or grid shape.
+        n: Total number of grid points.
         dtype: The desired data type of the returned tensor.
         device: The desired device of the returned tensor.
 
     Returns:
-        :math:`(m)` or :math:`(m, d)`, Indices to sample.
+        :math:`(m)`, Indices to sample.
     """
-    if isinstance(n, int):
-        ids = torch.full((m,), fill_value=-1, dtype=dtype)
-        torch.ops.vrlsnmr.schedpg(n, ids)
-        return ids.to(device)
-    else:
-        raise NotImplementedError
+    ids = torch.full((m,), fill_value=-1, dtype=dtype)
+    torch.ops.vrlsnmr.schedpg(n, ids)
+    return ids.to(device)

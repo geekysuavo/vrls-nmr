@@ -36,11 +36,6 @@ def dtype(request) -> torch.dtype:
     return getattr(torch, request.param)
 
 
-@pytest.fixture(params=("int", "long"))
-def int_dtype(request) -> torch.dtype:
-    return getattr(torch, request.param)
-
-
 @pytest.fixture(params=(1.0e2, 1.0e4))
 def tau(request) -> float:
     return request.param
@@ -130,26 +125,3 @@ def test_ymarginal(matrices):
 
     torch.testing.assert_close(sref, s, rtol=1e-6, atol=1e-6)
     assert s.gt(0).all()
-
-
-@pytest.mark.parametrize(("m", "n"), _mn_pairs)
-def test_schedexp(int_dtype, m, n):
-    rate = -math.log(0.2) / n
-    ids = op.schedexp(rate, m, n, dtype=int_dtype)
-
-    assert ids.dtype == int_dtype
-    assert ids.shape == (m,)
-    assert ids.ge(0).all()
-    assert ids.lt(n).all()
-    assert ids.unique().numel() == m
-
-
-@pytest.mark.parametrize(("m", "n"), _mn_pairs)
-def test_schedpg(int_dtype, m, n):
-    ids = op.schedpg(m, n, dtype=int_dtype)
-
-    assert ids.dtype == int_dtype
-    assert ids.shape == (m,)
-    assert ids.ge(0).all()
-    assert ids.lt(n).all()
-    assert ids.unique().numel() == m

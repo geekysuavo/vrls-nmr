@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.19.6"
+__generated_with = "0.25.1"
 app = marimo.App(width="medium")
 
 
@@ -9,8 +9,9 @@ def _():
     import matplotlib.pyplot as plt
     import torch
 
-    import vrlsnmr.operators as op
-    return op, plt
+    import vrlsnmr.schedules as sch
+
+    return plt, sch
 
 
 @app.cell
@@ -21,15 +22,22 @@ def _():
 
 
 @app.cell
-def _(m, n, op):
-    ids_exp = op.schedexp(rate=0.01, m=m, n=n)
+def _(m, n, sch):
+    ids_unif = sch.uniform(m=m, n=n)
+    ids_unif
+    return
+
+
+@app.cell
+def _(m, n, sch):
+    ids_exp = sch.exponential(rate=0.01, m=m, n=n)
     ids_exp
     return (ids_exp,)
 
 
 @app.cell
-def _(m, n, op):
-    ids_pg = op.schedpg(m=m, n=n)
+def _(m, n, sch):
+    ids_pg = sch.poisson_gap(m=m, n=n)
     ids_pg
     return (ids_pg,)
 
@@ -47,6 +55,17 @@ def _(ids_exp, ids_pg, n, plt):
     right.set_title("Exp")
 
     left
+    return
+
+
+@app.cell
+def _():
+    16*16
+    return
+
+
+@app.cell
+def _():
     return
 
 
