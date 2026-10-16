@@ -100,7 +100,8 @@ def poisson_gap(
         :math:`(m)` or :math:`(m, d)`, Indices to sample.
     """
     if md.is_multidim(n):
-        raise NotImplementedError
+        assert isinstance(n, tuple)
+        return op.schedpg_nd(m, n, dtype, device)
     else:
         assert isinstance(n, int)
         return op.schedpg(m, n, dtype, device)

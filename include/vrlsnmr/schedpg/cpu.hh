@@ -7,21 +7,15 @@ namespace impl {
 /* adapted from <https://gwagner.hms.harvard.edu/poisson-gap-sampling> */
 template<typename scalar_t>
 void schedpg(int64_t n, accessor_t<scalar_t, 1> out) {
-  const auto uniform = [] () -> double {
-    return torch::rand({}, torch::kFloat64).item<double>();
-  };
+  std::mt19937 rng;
+  {
+    auto gen = at::detail::getDefaultCPUGenerator();
+    std::lock_guard<std::mutex> lock(gen.mutex());
+    rng.seed(gen.get<at::CPUGeneratorImpl>()->random64());
+  }
 
   const auto poisson = [&] (double rate) -> scalar_t {
-    const double exp_rate = std::exp(-rate);
-    scalar_t draw = 0;
-    double prob = 1.0;
-
-    do {
-      prob *= uniform();
-      draw++;
-    } while (prob >= exp_rate);
-
-    return draw - 1;
+    return std::poisson_distribution<scalar_t>(rate)(rng);
   };
 
   const int64_t m = out.size(/*dim=*/0);

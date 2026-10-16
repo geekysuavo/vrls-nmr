@@ -1,5 +1,7 @@
 /* vrlsnmr: custom cpu operator implementations. */
 
+#include <random>
+
 #include <torch/script.h>
 #include <torch/extension.h>
 
@@ -15,10 +17,12 @@ accessor_t<scalar_t, ndim> access_as(torch::Tensor x) {
 #include <vrlsnmr/xmarginal/cpu.hh>
 #include <vrlsnmr/ymarginal/cpu.hh>
 #include <vrlsnmr/schedpg/cpu.hh>
+#include <vrlsnmr/schedpg_nd/cpu.hh>
 
 TORCH_LIBRARY_IMPL(vrlsnmr, CPU, m) {
   m.impl("kernel", vrlsnmr::cpu::kernel);
   m.impl("xmarginal", vrlsnmr::cpu::xmarginal);
   m.impl("ymarginal", vrlsnmr::cpu::ymarginal);
   m.impl("schedpg", vrlsnmr::cpu::schedpg);
+  m.impl("schedpg_nd", vrlsnmr::cpu::schedpg_nd);
 }

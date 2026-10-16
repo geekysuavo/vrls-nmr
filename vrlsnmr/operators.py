@@ -74,7 +74,7 @@ def schedpg(
     device: torch.device = _default_device,
 ) -> Tensor:
     """
-    Generate a Poisson-gap sampling schedule.
+    Generate a one-dimensional Poisson-gap sampling schedule.
 
     Args:
         m: Number of grid points to sample.
@@ -87,4 +87,27 @@ def schedpg(
     """
     ids = torch.full((m,), fill_value=-1, dtype=dtype)
     torch.ops.vrlsnmr.schedpg(n, ids)
+    return ids.to(device)
+
+
+def schedpg_nd(
+    m: int,
+    n: tuple[int, ...],
+    dtype: torch.dtype = _default_dtype,
+    device: torch.device = _default_device,
+) -> Tensor:
+    """
+    Generate a multidimensional Poisson-gap sampling schedule.
+
+    Args:
+        m: Number of grid points to sample.
+        n: Number of grid points along each dimension.
+        dtype: The desired data type of the returned tensor.
+        device: The desired device of the returned tensor.
+
+    Returns:
+        :math:`(m, d)`, Indices to sample.
+    """
+    ids = torch.full((m, len(n)), fill_value=-1, dtype=dtype)
+    torch.ops.vrlsnmr.schedpg_nd(n, ids)
     return ids.to(device)
