@@ -28,7 +28,7 @@ def kernel(weights: Tensor, tau: Tensor, ids: Tensor) -> Tensor:
     if ids.ndim == 1:
         return torch.ops.vrlsnmr.kernel(weights, tau, ids)
     else:
-        raise NotImplementedError
+        return torch.ops.vrlsnmr.kernel_nd(weights, tau, ids)
 
 
 def xmarginal(kernel_inv: Tensor, weights: Tensor, ids: Tensor) -> Tensor:
