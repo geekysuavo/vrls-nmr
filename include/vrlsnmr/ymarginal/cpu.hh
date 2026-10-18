@@ -15,7 +15,7 @@ void ymarginal(
   const int64_t n = coeffs.size(/*dim=*/1);
   const int64_t m = ids.size(/*dim=*/0);
 
-  #pragma omp parallel for
+  #pragma omp parallel for collapse(2)
   for (int64_t b = 0; b < bs; ++b) {
     for (int64_t k = 0; k < n; ++k) {
       scalar_t sum = 0;

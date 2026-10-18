@@ -19,7 +19,7 @@ void xmarginal(
 
   const auto theta = 2 * c10::pi<scalar_t> / n;
 
-  #pragma omp parallel for
+  #pragma omp parallel for collapse(2)
   for (int64_t b = 0; b < bs; ++b) {
     for (int64_t k = 0; k < n; ++k) {
       const auto wk = weights[b][k];
