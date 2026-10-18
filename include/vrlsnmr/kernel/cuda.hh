@@ -56,6 +56,7 @@ torch::Tensor kernel(
   const auto coeffs = torch::fft::fft(weights.reciprocal()).conj() / n;
   auto out = torch::empty({bs, m, m}, /*options=*/coeffs.options());
 
+  auto stream = c10::cuda::getCurrentCUDAStream();
   const dim3 threads(32, 32);
   const dim3 blocks(
     (bs + threads.x - 1) / threads.x,
@@ -65,7 +66,7 @@ torch::Tensor kernel(
   AT_DISPATCH_FLOATING_TYPES(
     weights.scalar_type(),
     "kernel", ([&] {
-    impl::kernel<scalar_t><<<blocks, threads>>>(
+    impl::kernel<scalar_t><<<blocks, threads, 0, stream>>>(
       access_as<c10::complex<scalar_t>, 2>(coeffs),
       access_as<scalar_t, 1>(tau),
       access_as<int64_t, 1>(ids),

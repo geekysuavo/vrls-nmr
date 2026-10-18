@@ -55,6 +55,7 @@ torch::Tensor xmarginal(
 
   auto out = torch::empty({bs, n}, /*options=*/weights.options());
 
+  auto stream = c10::cuda::getCurrentCUDAStream();
   const dim3 threads(32, 32);
   const dim3 blocks(
     (bs + threads.x - 1) / threads.x,
@@ -64,7 +65,7 @@ torch::Tensor xmarginal(
   AT_DISPATCH_FLOATING_TYPES(
     weights.scalar_type(),
     "xmarginal", ([&] {
-    impl::xmarginal<scalar_t><<<blocks, threads>>>(
+    impl::xmarginal<scalar_t><<<blocks, threads, 0, stream>>>(
       access_as<c10::complex<scalar_t>, 3>(kernel_inv),
       access_as<scalar_t, 2>(weights),
       access_as<int64_t, 1>(ids),
