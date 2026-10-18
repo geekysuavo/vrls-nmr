@@ -104,7 +104,6 @@ def test_ymarginal(tensors):
     (ref_kernel, _, ref_ymarginal) = refs
 
     kernel_inv = torch.linalg.inv(ref_kernel)
-
     ymarginal = op.ymarginal(kernel_inv, w, ids)
 
     torch.testing.assert_close(ymarginal, ref_ymarginal, rtol=1e-6, atol=1e-6)

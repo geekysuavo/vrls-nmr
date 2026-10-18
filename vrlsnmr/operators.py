@@ -14,16 +14,16 @@ _default_device = torch.get_default_device()
 
 
 def kernel(weights: Tensor, tau: Tensor, ids: Tensor) -> Tensor:
-    """
+    r"""
     Construct a kernel matrix.
 
     Args:
-        weights: :math:`(b, n)`, Spectral weights.
+        weights: :math:`(b, n)` or :math:`(b, n_1, \dots, n_d)`, Spectral weights.
         tau: :math:`(b)`, Noise precision.
         ids: :math:`(m)` or :math:`(m, d)`, Measurement indices.
 
     Returns:
-        :math:`(b, m, m)`, Kernel matrix.
+        :math:`(b, m, m)` or :math:`(b, c, m, m)`, Kernel matrix.
     """
     if ids.ndim == 1:
         return torch.ops.vrlsnmr.kernel(weights, tau, ids)
@@ -32,39 +32,41 @@ def kernel(weights: Tensor, tau: Tensor, ids: Tensor) -> Tensor:
 
 
 def xmarginal(kernel_inv: Tensor, weights: Tensor, ids: Tensor) -> Tensor:
-    """
+    r"""
     Compute frequency-domain marginal variances.
 
     Args:
-        kernel_inv: :math:`(b, m, m)`, Inverse kernel matrix.
-        weights: :math:`(b, n)`, Spectral weights.
+        kernel_inv: :math:`(b, m, m)` or :math:`(b, c, m, m)`, Inverse kernel matrix.
+        weights: :math:`(b, n)` or :math:`(b, n_1, \dots, n_d)`, Spectral weights.
         ids: :math:`(m)` or :math:`(m, d)`, Measurement indices.
 
     Returns:
-        :math:`(b, n)`, Frequency-domain marginal variances.
+        :math:`(b, n)` or :math:`(b, n_1, \dots, n_d)`,
+        Frequency-domain marginal variances.
     """
     if ids.ndim == 1:
         return torch.ops.vrlsnmr.xmarginal(kernel_inv, weights, ids)
     else:
-        raise NotImplementedError
+        return torch.ops.vrlsnmr.xmarginal_nd(kernel_inv, weights, ids)
 
 
 def ymarginal(kernel_inv: Tensor, weights: Tensor, ids: Tensor) -> Tensor:
-    """
+    r"""
     Compute time-domain marginal variances.
 
     Args:
-        kernel_inv: :math:`(b, m, m)`, Inverse kernel matrix.
-        weights: :math:`(b, n)`, Spectral weights.
+        kernel_inv: :math:`(b, m, m)` or :math:`(b, c, m, m)`, Inverse kernel matrix.
+        weights: :math:`(b, n)` or :math:`(b, n_1, \dots, n_d)`, Spectral weights.
         ids: :math:`(m)` or :math:`(m, d)`, Measurement indices.
 
     Returns:
-        :math:`(b, n)`, Time-domain marginal variances.
+        :math:`(b, n)` or :math:`(b, n_1, \dots, n_d)`,
+        Time-domain marginal variances.
     """
     if ids.ndim == 1:
         return torch.ops.vrlsnmr.ymarginal(kernel_inv, weights, ids)
     else:
-        raise NotImplementedError
+        return torch.ops.vrlsnmr.ymarginal_nd(kernel_inv, weights, ids)
 
 
 def schedpg(

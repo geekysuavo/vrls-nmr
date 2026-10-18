@@ -116,3 +116,25 @@ def test_kernel_nd(tensors):
     torch.testing.assert_close(kernel, ref_kernel, rtol=1e-6, atol=1e-6)
     assert kernel.diagonal(dim1=2, dim2=3).real.gt(0).all()
     assert kernel.diagonal(dim1=2, dim2=3).imag.eq(0).all()
+
+
+def test_xmarginal_nd(tensors):
+    (ids, _, w, refs) = tensors
+    (ref_kernel, ref_xmarginal, _) = refs
+
+    kernel_inv = torch.linalg.inv(ref_kernel)
+    xmarginal = op.xmarginal(kernel_inv, w, ids)
+
+    torch.testing.assert_close(xmarginal, ref_xmarginal, rtol=1e-6, atol=1e-6)
+    assert xmarginal.gt(0).all()
+
+
+def test_ymarginal_nd(tensors):
+    (ids, _, w, refs) = tensors
+    (ref_kernel, _, ref_ymarginal) = refs
+
+    kernel_inv = torch.linalg.inv(ref_kernel)
+    ymarginal = op.ymarginal(kernel_inv, w, ids)
+
+    torch.testing.assert_close(ymarginal, ref_ymarginal, rtol=1e-6, atol=1e-6)
+    assert ymarginal.gt(0).all()
