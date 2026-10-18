@@ -161,20 +161,20 @@ def vrls(
         return_weights = warm_start
 
     for _ in range(niter):
-        K = op.kernel(w, tau_batched, ids)
-        Kinv = torch.linalg.inv(K)
+        kernel = op.kernel(w, tau_batched, ids)
+        kernel_inv = torch.linalg.inv(kernel)
 
-        mu = (Kinv @ y.unsqueeze(dim=-1)).squeeze(dim=-1)
+        mu = (kernel_inv @ y.unsqueeze(dim=-1)).squeeze(dim=-1)
         mu = md.scatter(mu, flat_ids, n)
         mu = mx.fftn(mu) / mx.expand(w)
 
-        gamma_diag = op.xmarginal(Kinv, w, ids)
+        gamma_diag = op.xmarginal(kernel_inv, w, ids)
 
         m2 = mu.abs().square() + gamma_diag
         w = (xi / (m2 + eps)).sqrt()
 
     yhat = mx.fftn(mu, inverse=True)
-    sigma_diag = op.ymarginal(Kinv, w, ids)
+    sigma_diag = op.ymarginal(kernel_inv, w, ids)
 
     if return_weights:
         return (mu, gamma_diag, yhat, sigma_diag, w)
@@ -238,15 +238,15 @@ def vrls_ex(
         return_weights = warm_start
 
     for _ in range(niter):
-        K = op.kernel(nu_w, nu_tau, ids)
-        Kinv = torch.linalg.inv(K)
+        kernel = op.kernel(nu_w, nu_tau, ids)
+        kernel_inv = torch.linalg.inv(kernel)
 
-        mu = (Kinv @ y.unsqueeze(dim=-1)).squeeze(dim=-1)
+        mu = (kernel_inv @ y.unsqueeze(dim=-1)).squeeze(dim=-1)
         mu = md.scatter(mu, flat_ids, n)
         mu = mx.fftn(mu) / mx.expand(nu_w)
 
-        gamma_diag = op.xmarginal(Kinv, nu_w, ids)
-        sigma_diag = op.ymarginal(Kinv, nu_w, ids)
+        gamma_diag = op.xmarginal(kernel_inv, nu_w, ids)
+        sigma_diag = op.ymarginal(kernel_inv, nu_w, ids)
 
         m2 = mu.abs().square() + gamma_diag
         nu_w = (nu_xi.unsqueeze(dim=-1) / (m2 + eps)).sqrt()
@@ -319,8 +319,8 @@ def vrls_mf(
         w = torch.ones((bs, *grid), dtype=real_dtype, device=device)
         return_weights = warm_start
 
-    AtA_diag = y.size(dim=-1) / math.prod(grid)  # m / n
-    L = 1
+    ata_diag = y.size(dim=-1) / math.prod(grid)  # m / n
+    lipschitz = 1
 
     for _ in range(niter):
         m2 = mx.abs(mu, square=True) + gamma
@@ -330,12 +330,12 @@ def vrls_mf(
         delta = md.gather(delta, flat_ids, n) - y
         delta = md.scatter(delta, flat_ids, n)
         delta = mx.fftn(delta)
-        delta = (L / 2) * mu - delta
+        delta = (lipschitz / 2) * mu - delta
 
-        D_diag = mx.expand(tau / 2 + w)
-        mu = tau * D_diag.reciprocal() * delta
+        btb_diag = mx.expand(tau / 2 + w)
+        mu = tau * btb_diag.reciprocal() * delta
 
-        gamma = (tau * AtA_diag + w).reciprocal()
+        gamma = (tau * ata_diag + w).reciprocal()
 
     yhat = mx.fftn(mu, inverse=True)
     grid_dims = tuple(range(1, gamma.ndim))

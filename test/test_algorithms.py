@@ -1,5 +1,4 @@
 # Standard
-import cmath
 import math
 
 # Third party
@@ -20,14 +19,11 @@ def build_instance(
     stdev: float = 0.01,
 ) -> tuple[Tensor, Tensor]:
     ids = torch.randperm(n).narrow(dim=0, start=0, length=m).sort(dim=0).values
-    B = torch.eye(n).index_select(dim=0, index=ids)
+    ids_matrix = torch.eye(n).index_select(dim=0, index=ids).to(torch.cfloat)
 
-    omega = cmath.exp(-2j * math.pi / n)
-    i = torch.arange(n).unsqueeze(dim=0)
-    j = torch.arange(n).unsqueeze(dim=1)
-    Phi = omega ** (i * j) / math.sqrt(n)
-    Phi = Phi.t().conj()  # idft
-    A = B.to(torch.cfloat) @ Phi
+    ij = torch.arange(n)
+    idft_matrix = (2j * math.pi * ij.outer(ij) / n).exp() / math.sqrt(n)
+    meas_matrix = ids_matrix @ idft_matrix
 
     x0 = torch.zeros(bs, n)
     for b in range(bs):
@@ -37,7 +33,7 @@ def build_instance(
     x0 = x0.to(torch.cfloat)
 
     noise = stdev * torch.randn((bs, m), dtype=torch.cfloat)
-    y = A.view(1, m, n) @ x0.view(bs, n, 1) + noise.view(bs, m, 1)
+    y = meas_matrix.view(1, m, n) @ x0.view(bs, n, 1) + noise.view(bs, m, 1)
     y = y.squeeze(dim=2)
     assert y.shape == (bs, m)
 

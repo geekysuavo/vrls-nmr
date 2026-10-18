@@ -21,22 +21,22 @@ def build_instance(
 ) -> tuple[Tensor, Tensor]:
     assert n
     ndim = len(n)
-    N = math.prod(n)
-    ids = torch.randperm(N).narrow(dim=0, start=0, length=m)
+    n_grid = math.prod(n)
+    ids = torch.randperm(n_grid).narrow(dim=0, start=0, length=m)
     ids = torch.stack(torch.unravel_index(ids, n), dim=-1)
 
-    peaks = torch.multinomial(torch.ones(bs, N), num_samples=k)
+    peaks = torch.multinomial(torch.ones(bs, n_grid), num_samples=k)
     peaks = torch.stack(torch.unravel_index(peaks, n), dim=-1)
     frequencies = 0.5 * peaks / torch.tensor(n)
 
     signal = Signal(
         frequencies=frequencies,
-        amplitudes=torch.ones(bs, k) / math.sqrt(N),
+        amplitudes=torch.ones(bs, k) / math.sqrt(n_grid),
         decayrates=torch.zeros(bs, k, ndim),
         phases=torch.zeros(bs, k, ndim),
     )
 
-    y = signal(ids, noise=stdev / math.sqrt(N))
+    y = signal(ids, noise=stdev / math.sqrt(n_grid))
     return (y, ids)
 
 

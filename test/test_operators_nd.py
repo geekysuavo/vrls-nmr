@@ -53,11 +53,13 @@ def tau(request) -> float:
 def tensors(device, dtype, grid, tau) -> tuple[Tensor | tuple[Tensor, ...], ...]:
     complex_dtype = dtype.to_complex()
     nch = 1 << (len(grid) - 1)
-    n = math.prod(grid)
-    m = n // 4
+    n_grid = math.prod(grid)
+    m = n_grid // 4
     bs = 4
 
-    flat_ids = torch.randperm(n).narrow(dim=0, start=0, length=m).sort(dim=0).values
+    flat_ids = (
+        torch.randperm(n_grid).narrow(dim=0, start=0, length=m).sort(dim=0).values
+    )
     ids = torch.stack(torch.unravel_index(flat_ids, grid), dim=-1)
     ids = ids.to(device=device, dtype=torch.long)
 
@@ -71,7 +73,7 @@ def tensors(device, dtype, grid, tau) -> tuple[Tensor | tuple[Tensor, ...], ...]
         .mean(dim=-1)
         .mul(1.0e3)
     )
-    flat_weights = weights.view(bs, n)
+    flat_weights = weights.view(bs, n_grid)
 
     kernels = []
     for channel in range(nch):
