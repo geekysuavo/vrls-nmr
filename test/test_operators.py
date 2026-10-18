@@ -1,6 +1,5 @@
 # Standard
 import cmath
-import itertools
 import math
 
 # Third party
@@ -10,14 +9,6 @@ from torch import Tensor
 
 # VRLS
 import vrlsnmr.operators as op
-
-_mn_pairs = list(
-    itertools.chain(
-        itertools.combinations(range(2, 64, 4), 2),
-        itertools.combinations(range(64, 256, 16), 2),
-        itertools.combinations(range(256, 1024, 64), 2),
-    )
-)
 
 
 @pytest.fixture(params=("10x100", "50x100", "20x80"))
