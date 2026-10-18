@@ -5,6 +5,8 @@
 #include <torch/script.h>
 #include <torch/extension.h>
 
+#include <c10/util/MathConstants.h>
+
 template<typename scalar_t, size_t ndim>
 using accessor_t = torch::TensorAccessor<scalar_t, ndim>;
 
@@ -17,6 +19,7 @@ accessor_t<scalar_t, ndim> access_as(torch::Tensor x) {
 #include <vrlsnmr/kernel/cpu.hh>
 #include <vrlsnmr/kernel_nd/cpu.hh>
 #include <vrlsnmr/xmarginal/cpu.hh>
+#include <vrlsnmr/xmarginal_nd/cpu.hh>
 #include <vrlsnmr/ymarginal/cpu.hh>
 #include <vrlsnmr/schedpg/cpu.hh>
 #include <vrlsnmr/schedpg_nd/cpu.hh>
@@ -27,6 +30,7 @@ TORCH_LIBRARY_IMPL(vrlsnmr, CPU, m) {
   m.impl("ymarginal", vrlsnmr::cpu::ymarginal);
 
   m.impl("kernel_nd", vrlsnmr::cpu::kernel_nd);
+  m.impl("xmarginal_nd", vrlsnmr::cpu::xmarginal_nd);
 
   m.impl("schedpg", vrlsnmr::cpu::schedpg);
   m.impl("schedpg_nd", vrlsnmr::cpu::schedpg_nd);

@@ -8,6 +8,7 @@ TORCH_LIBRARY(vrlsnmr, m) {
   m.def("ymarginal(Tensor kernel_inv, Tensor weights, Tensor ids) -> Tensor");
 
   m.def("kernel_nd(Tensor weights, Tensor tau, Tensor ids) -> Tensor");
+  m.def("xmarginal_nd(Tensor kernel_inv, Tensor weights, Tensor ids) -> Tensor");
 
   m.def("schedpg(int n, Tensor(a!) out) -> ()");
   m.def("schedpg_nd(int[] n, Tensor(a!) out) -> ()");

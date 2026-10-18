@@ -1,7 +1,5 @@
 /* vrlsnmr: cpu implementation of xmarginal. */
 
-#include <c10/util/MathConstants.h>
-
 namespace vrlsnmr::cpu {
 
 namespace impl {

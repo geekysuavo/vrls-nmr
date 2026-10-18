@@ -100,8 +100,8 @@ def tensors(device, dtype, grid, tau) -> tuple[Tensor | tuple[Tensor, ...], ...]
         ymarginals.append(ymarginal)
 
     kernels = torch.stack(kernels, dim=1)
-    xmarginals = torch.stack(xmarginals).sum(dim=0).view(bs, *grid)
-    ymarginals = torch.stack(ymarginals).sum(dim=0).view(bs, *grid)
+    xmarginals = torch.stack(xmarginals).mean(dim=0).view(bs, *grid)
+    ymarginals = torch.stack(ymarginals).mean(dim=0).view(bs, *grid)
     refs = (kernels, xmarginals, ymarginals)
 
     return (ids, tau, weights, refs)
