@@ -76,6 +76,8 @@ def tensors(device, dtype, grid, tau) -> tuple[Tensor | tuple[Tensor, ...], ...]
     flat_weights = weights.view(bs, n_grid)
 
     kernels = []
+    xmarginals = []
+    ymarginals = []
     for channel in range(nch):
         idft_matrix = make_idft_matrix(channel, grid, device, dtype)
         meas_matrix = idft_matrix[flat_ids]
@@ -84,11 +86,22 @@ def tensors(device, dtype, grid, tau) -> tuple[Tensor | tuple[Tensor, ...], ...]
         kernel = torch.eye(m, device=device, dtype=complex_dtype) / tau.view(-1, 1, 1)
         kernel = kernel + meas_matrix @ inv_weights @ meas_matrix.mH
 
+        gamma = torch.linalg.inv(
+            flat_weights.diag_embed().to(complex_dtype)
+            + tau.view(-1, 1, 1) * meas_matrix.mH @ meas_matrix
+        )
+        xmarginal = gamma.real.diagonal(dim1=-2, dim2=-1)
+
+        sigma = idft_matrix @ gamma @ idft_matrix.mH
+        ymarginal = sigma.real.diagonal(dim1=-2, dim2=-1)
+
         kernels.append(kernel)
+        xmarginals.append(xmarginal)
+        ymarginals.append(ymarginal)
 
     kernels = torch.stack(kernels, dim=1)
-    xmarginals = None  # FIXME -- compute reference xmarginal
-    ymarginals = None  # FIXME -- compute reference ymarginal
+    xmarginals = torch.stack(xmarginals).sum(dim=0).view(bs, *grid)
+    ymarginals = torch.stack(ymarginals).sum(dim=0).view(bs, *grid)
     refs = (kernels, xmarginals, ymarginals)
 
     return (ids, tau, weights, refs)
