@@ -50,11 +50,12 @@ def tau(request) -> float:
 
 
 @pytest.fixture
-def tensors(device, dtype, grid, tau) -> tuple[Tensor, ...]:
-    bs = 4
+def tensors(device, dtype, grid, tau) -> tuple[Tensor | tuple[Tensor, ...], ...]:
+    complex_dtype = dtype.to_complex()
     nch = 1 << (len(grid) - 1)
     n = math.prod(grid)
     m = n // 4
+    bs = 4
 
     flat_ids = torch.randperm(n).narrow(dim=0, start=0, length=m).sort(dim=0).values
     ids = torch.stack(torch.unravel_index(flat_ids, grid), dim=-1)
@@ -76,9 +77,8 @@ def tensors(device, dtype, grid, tau) -> tuple[Tensor, ...]:
     for channel in range(nch):
         idft_matrix = make_idft_matrix(channel, grid, device, dtype)
         meas_matrix = idft_matrix[flat_ids]
-        complex_dtype = idft_matrix.dtype
 
-        inv_weights = torch.diag_embed(1 / flat_weights).to(complex_dtype)
+        inv_weights = flat_weights.reciprocal().diag_embed().to(complex_dtype)
         kernel = torch.eye(m, device=device, dtype=complex_dtype) / tau.view(-1, 1, 1)
         kernel = kernel + meas_matrix @ inv_weights @ meas_matrix.mH
 

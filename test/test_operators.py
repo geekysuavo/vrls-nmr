@@ -1,5 +1,4 @@
 # Standard
-import cmath
 import math
 
 # Third party
@@ -33,25 +32,20 @@ def tau(request) -> float:
 
 
 @pytest.fixture
-def matrices(tau, shape, device, dtype) -> tuple[Tensor, ...]:
+def tensors(device, dtype, shape, tau) -> tuple[Tensor | tuple[Tensor, ...], ...]:
+    complex_dtype = dtype.to_complex()
     (m, n) = shape
     bs = 4
 
-    ids = torch.randperm(n).narrow(dim=0, start=0, length=m).sort(dim=0).values
-    B = torch.eye(n).index_select(dim=0, index=ids)
-
-    omega = cmath.exp(-2j * math.pi / n)
-    i = torch.arange(n).unsqueeze(dim=0)
-    j = torch.arange(n).unsqueeze(dim=1)
-    Phi = omega ** (i * j) / math.sqrt(n)
-    Phi = Phi.t().conj()
-
-    A = B.to(torch.cfloat) @ Phi
-
-    A = A.to(device=device, dtype=dtype.to_complex())
-    B = B.to(device=device, dtype=dtype)
-    Phi = Phi.to(device=device, dtype=dtype.to_complex())
-    ids = ids.to(device=device, dtype=torch.long)
+    ids = (
+        torch.randperm(n, device=device, dtype=torch.long)
+        .narrow(dim=0, start=0, length=m)
+        .sort(dim=0)
+        .values
+    )
+    ids_matrix = torch.eye(n, device=device, dtype=complex_dtype).index_select(
+        dim=0, index=ids
+    )
 
     tau = (
         torch.randn((bs, 50), device=device, dtype=dtype).square().mean(dim=-1).mul(tau)
@@ -64,55 +58,54 @@ def matrices(tau, shape, device, dtype) -> tuple[Tensor, ...]:
         .mul(1.0e3)
     )
 
-    return (A, B, Phi, ids, tau, weights)
+    k = torch.arange(n, device=device, dtype=dtype)
+    idft_matrix = (2j * math.pi * k.outer(k) / n).exp() / math.sqrt(n)
+    meas_matrix = ids_matrix @ idft_matrix
+
+    inv_weights = weights.reciprocal().diag_embed().to(complex_dtype)
+    kernel = torch.eye(m, device=device, dtype=complex_dtype) / tau.view(-1, 1, 1)
+    kernel = kernel + meas_matrix @ inv_weights @ meas_matrix.mH
+
+    gamma_inv = weights.diag_embed() + tau.view(-1, 1, 1) * meas_matrix.mH @ meas_matrix
+    gamma = torch.linalg.inv(gamma_inv)
+    xmarginal = gamma.real.diagonal(dim1=-2, dim2=-1)
+
+    sigma = idft_matrix @ gamma @ idft_matrix.mH
+    ymarginal = sigma.real.diagonal(dim1=-2, dim2=-1)
+
+    refs = (kernel, xmarginal, ymarginal)
+    return (ids, tau, weights, refs)
 
 
-def test_kernel(matrices):
-    (A, _, _, ids, tau, w) = matrices
-    (m, _) = A.shape
+def test_kernel(tensors):
+    (ids, tau, w, refs) = tensors
+    (ref_kernel, _, _) = refs
 
-    Im = torch.eye(m, device=A.device, dtype=A.dtype)
-    Winv = w.reciprocal().diag_embed().to(dtype=A.dtype)
-    Kref = Im / tau.view(-1, 1, 1) + A @ Winv @ A.t().conj()
+    kernel = op.kernel(w, tau, ids)
 
-    K = op.kernel(w, tau, ids)
-
-    torch.testing.assert_close(Kref, K, rtol=1e-6, atol=1e-6)
-    assert K.diagonal(dim1=1, dim2=2).real.gt(0).all()
-    assert K.diagonal(dim1=1, dim2=2).imag.eq(0).all()
+    torch.testing.assert_close(kernel, ref_kernel, rtol=1e-6, atol=1e-6)
+    assert kernel.diagonal(dim1=1, dim2=2).real.gt(0).all()
+    assert kernel.diagonal(dim1=1, dim2=2).imag.eq(0).all()
 
 
-def test_xmarginal(matrices):
-    (A, _, _, ids, tau, w) = matrices
-    (m, _) = A.shape
+def test_xmarginal(tensors):
+    (ids, _, w, refs) = tensors
+    (ref_kernel, ref_xmarginal, _) = refs
 
-    Im = torch.eye(m, device=A.device, dtype=A.dtype)
-    Winv = w.reciprocal().diag_embed().to(dtype=A.dtype)
-    Gamma_inv = w.diag_embed() + tau.view(-1, 1, 1) * A.t().conj() @ A
-    gref = torch.linalg.inv(Gamma_inv).real.diagonal(dim1=-2, dim2=-1)
-    Kref = Im / tau.view(-1, 1, 1) + A @ Winv @ A.t().conj()
-    Kinv = torch.linalg.inv(Kref)
+    kernel_inv = torch.linalg.inv(ref_kernel)
+    xmarginal = op.xmarginal(kernel_inv, w, ids)
 
-    g = op.xmarginal(Kinv, w, ids)
-
-    torch.testing.assert_close(gref, g, rtol=1e-6, atol=1e-6)
-    assert g.gt(0).all()
+    torch.testing.assert_close(xmarginal, ref_xmarginal, rtol=1e-6, atol=1e-6)
+    assert xmarginal.gt(0).all()
 
 
-def test_ymarginal(matrices):
-    (A, _, Phi, ids, tau, w) = matrices
-    (m, _) = A.shape
+def test_ymarginal(tensors):
+    (ids, _, w, refs) = tensors
+    (ref_kernel, _, ref_ymarginal) = refs
 
-    Im = torch.eye(m, device=A.device, dtype=A.dtype)
-    Winv = w.reciprocal().diag_embed().to(dtype=A.dtype)
-    Gamma_inv = w.diag_embed() + tau.view(-1, 1, 1) * A.t().conj() @ A
-    Gamma = torch.linalg.inv(Gamma_inv)
-    Sigma = Phi @ Gamma @ Phi.t().conj()
-    sref = Sigma.real.diagonal(dim1=-2, dim2=-1)
-    Kref = Im / tau.view(-1, 1, 1) + A @ Winv @ A.t().conj()
-    Kinv = torch.linalg.inv(Kref)
+    kernel_inv = torch.linalg.inv(ref_kernel)
 
-    s = op.ymarginal(Kinv, w, ids)
+    ymarginal = op.ymarginal(kernel_inv, w, ids)
 
-    torch.testing.assert_close(sref, s, rtol=1e-6, atol=1e-6)
-    assert s.gt(0).all()
+    torch.testing.assert_close(ymarginal, ref_ymarginal, rtol=1e-6, atol=1e-6)
+    assert ymarginal.gt(0).all()
