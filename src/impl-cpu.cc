@@ -13,6 +13,7 @@ accessor_t<scalar_t, ndim> access_as(torch::Tensor x) {
   return x.accessor<scalar_t, ndim>();
 }
 
+#include <vrlsnmr/grid.hh>
 #include <vrlsnmr/kernel/cpu.hh>
 #include <vrlsnmr/xmarginal/cpu.hh>
 #include <vrlsnmr/ymarginal/cpu.hh>

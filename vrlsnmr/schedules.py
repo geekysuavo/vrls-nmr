@@ -101,7 +101,7 @@ def poisson_gap(
     """
     if md.is_multidim(n):
         assert isinstance(n, tuple)
-        return op.schedpg_nd(m, n, dtype, device)
+        return op.schedpg(m, n, dtype, device)
     else:
         assert isinstance(n, int)
         return op.schedpg(m, n, dtype, device)

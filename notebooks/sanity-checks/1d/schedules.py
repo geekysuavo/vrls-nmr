@@ -7,7 +7,6 @@ app = marimo.App(width="medium")
 @app.cell
 def _():
     import matplotlib.pyplot as plt
-    import torch
 
     import vrlsnmr.schedules as sch
 
@@ -55,17 +54,6 @@ def _(ids_exp, ids_pg, n, plt):
     right.set_title("Exp")
 
     left
-    return
-
-
-@app.cell
-def _():
-    16*16
-    return
-
-
-@app.cell
-def _():
     return
 
 

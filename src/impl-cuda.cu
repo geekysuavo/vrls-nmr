@@ -12,6 +12,7 @@ accessor_t<scalar_t, ndim> access_as(torch::Tensor x) {
   return x.packed_accessor32<scalar_t, ndim, torch::RestrictPtrTraits>();
 }
 
+#include <vrlsnmr/grid.hh>
 #include <vrlsnmr/kernel/cuda.hh>
 #include <vrlsnmr/xmarginal/cuda.hh>
 #include <vrlsnmr/ymarginal/cuda.hh>
