@@ -21,6 +21,7 @@ accessor_t<scalar_t, ndim> access_as(torch::Tensor x) {
 #include <vrlsnmr/xmarginal/cpu.hh>
 #include <vrlsnmr/xmarginal_nd/cpu.hh>
 #include <vrlsnmr/ymarginal/cpu.hh>
+#include <vrlsnmr/ymarginal_nd/cpu.hh>
 #include <vrlsnmr/schedpg/cpu.hh>
 #include <vrlsnmr/schedpg_nd/cpu.hh>
 
@@ -31,6 +32,7 @@ TORCH_LIBRARY_IMPL(vrlsnmr, CPU, m) {
 
   m.impl("kernel_nd", vrlsnmr::cpu::kernel_nd);
   m.impl("xmarginal_nd", vrlsnmr::cpu::xmarginal_nd);
+  m.impl("ymarginal_nd", vrlsnmr::cpu::ymarginal_nd);
 
   m.impl("schedpg", vrlsnmr::cpu::schedpg);
   m.impl("schedpg_nd", vrlsnmr::cpu::schedpg_nd);
