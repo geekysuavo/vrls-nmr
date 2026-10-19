@@ -71,6 +71,7 @@ torch::Tensor ymarginal(
       access_as<int64_t, 1>(ids),
       access_as<scalar_t, 2>(out)
     );
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
   }));
 
   return out;

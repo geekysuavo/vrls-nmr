@@ -9,32 +9,26 @@ namespace impl {
 template<typename scalar_t>
 __global__ void xmarginal(
   const accessor_t<c10::complex<scalar_t>, 3> kernel_inv,
-  const accessor_t<scalar_t, 2> weights,
   const accessor_t<int64_t, 1> ids,
-  accessor_t<scalar_t, 2> out
+  accessor_t<scalar_t, 3> hist
 ) {
-  const int bs = weights.size(/*dim=*/0);
-  const int n = weights.size(/*dim=*/1);
-  const int m = ids.size(/*dim=*/0);
+  const int64_t bs = hist.size(/*dim=*/0);
+  const int64_t n = hist.size(/*dim=*/1);
+  const int64_t m = ids.size(/*dim=*/0);
 
-  const int b = blockIdx.x * blockDim.x + threadIdx.x;
-  const int k = blockIdx.y * blockDim.y + threadIdx.y;
+  const int64_t j = static_cast<int64_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+  const int64_t i = static_cast<int64_t>(blockIdx.y) * blockDim.y + threadIdx.y;
 
-  if (b < bs && k < n) {
-    const auto theta = 2 * c10::pi<scalar_t> / n;
-    const auto wk = weights[b][k];
-    scalar_t sum = 0;
+  if (i >= m || j >= m)
+    return;
 
-    for (int i = 0; i < m; ++i) {
-      for (int j = 0; j < m; ++j) {
-        const auto theta_ij = theta * k * (ids[j] - ids[i]);
-        const c10::complex<scalar_t> alpha_ij(cos(theta_ij), sin(theta_ij));
+  int64_t diff = ids[j] - ids[i];
+  diff = diff >= 0 ? diff : diff + n;
 
-        sum += (kernel_inv[b][i][j] * alpha_ij).real();
-      }
-    }
-
-    out[b][k] = 1 / wk - sum / (n * wk * wk);
+  for (int64_t b = blockIdx.z; b < bs; b += gridDim.z) {
+    const auto elem = kernel_inv[b][i][j];
+    atomicAdd(&hist[b][diff][0], elem.real());
+    atomicAdd(&hist[b][diff][1], elem.imag());
   }
 }
 
@@ -52,14 +46,17 @@ torch::Tensor xmarginal(
 ) {
   const int64_t bs = weights.size(/*dim=*/0);
   const int64_t n = weights.size(/*dim=*/1);
+  const int64_t m = ids.size(/*dim=*/0);
 
-  auto out = torch::empty({bs, n}, /*options=*/weights.options());
+  auto hist = torch::zeros({bs, n}, /*options=*/kernel_inv.options());
+  auto hist_real = torch::view_as_real(hist);
 
   auto stream = c10::cuda::getCurrentCUDAStream();
-  const dim3 threads(32, 32);
+  const dim3 threads(32, 8);
   const dim3 blocks(
-    (bs + threads.x - 1) / threads.x,
-    (n + threads.y - 1) / threads.y
+    (m + threads.x - 1) / threads.x,
+    (m + threads.y - 1) / threads.y,
+    std::min(bs, max_grid_yz)
   );
 
   AT_DISPATCH_FLOATING_TYPES(
@@ -67,13 +64,14 @@ torch::Tensor xmarginal(
     "xmarginal", ([&] {
     impl::xmarginal<scalar_t><<<blocks, threads, 0, stream>>>(
       access_as<c10::complex<scalar_t>, 3>(kernel_inv),
-      access_as<scalar_t, 2>(weights),
       access_as<int64_t, 1>(ids),
-      access_as<scalar_t, 2>(out)
+      access_as<scalar_t, 3>(hist_real)
     );
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
   }));
 
-  return out;
+  const auto sums = torch::real(torch::fft::ifft(hist));
+  return weights.reciprocal() - sums / weights.square();
 }
 
 } /* namespace vrlsnmr::cuda */

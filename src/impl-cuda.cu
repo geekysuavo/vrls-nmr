@@ -5,6 +5,9 @@
 
 #include <c10/cuda/CUDAStream.h>
 
+/* maximum size of gridDim.y and gridDim.z */
+constexpr int64_t max_grid_yz = 65535;
+
 template<typename scalar_t, size_t ndim>
 using accessor_t =
   torch::PackedTensorAccessor32<scalar_t, ndim, torch::RestrictPtrTraits>;

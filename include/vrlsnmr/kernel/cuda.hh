@@ -11,29 +11,37 @@ __global__ void kernel(
   const accessor_t<int64_t, 1> ids,
   accessor_t<c10::complex<scalar_t>, 3> out
 ) {
-  const int bs = coeffs.size(/*dim=*/0);
-  const int n = coeffs.size(/*dim=*/1);
-  const int m = ids.size(/*dim=*/0);
+  const int64_t bs = coeffs.size(/*dim=*/0);
+  const int64_t n = coeffs.size(/*dim=*/1);
+  const int64_t m = ids.size(/*dim=*/0);
 
-  const int b = blockIdx.x * blockDim.x + threadIdx.x;
-  const int ij = blockIdx.y * blockDim.y + threadIdx.y;
+  const int64_t j = static_cast<int64_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+  const int64_t i = static_cast<int64_t>(blockIdx.y) * blockDim.y + threadIdx.y;
 
-  if (b < bs && ij < m * m) {
-    const int i = ij / m;
-    const int j = ij - i * m;
+  if (i >= m || j >= m)
+    return;
+
+  const int64_t ids_i = ids[i];
+  const int64_t ids_j = ids[j];
+
+  for (int64_t b = blockIdx.z; b < bs; b += gridDim.z) {
+    c10::complex<scalar_t> elem;
 
     if (i == j) {
-      const c10::complex<scalar_t> c0{coeffs[b][0].real()};
-      out[b][i][j] = c0 + 1 / tau[b];
+      elem = c10::complex<scalar_t>{coeffs[b][0].real() + 1 / tau[b], 0};
     }
     else if (i < j) {
-      const int diff = ids[i] - ids[j];
-      const int k = diff >= 0 ? diff : n + diff;
-      const auto Kij = coeffs[b][k];
-
-      out[b][i][j] = Kij;
-      out[b][j][i] = std::conj(Kij);
+      const int64_t diff = ids_i - ids_j;
+      const int64_t k = diff >= 0 ? diff : n + diff;
+      elem = coeffs[b][k];
     }
+    else {
+      const int64_t diff = ids_j - ids_i;
+      const int64_t k = diff >= 0 ? diff : n + diff;
+      elem = std::conj(coeffs[b][k]);
+    }
+
+    out[b][i][j] = elem;
   }
 }
 
@@ -57,10 +65,11 @@ torch::Tensor kernel(
   auto out = torch::empty({bs, m, m}, /*options=*/coeffs.options());
 
   auto stream = c10::cuda::getCurrentCUDAStream();
-  const dim3 threads(32, 32);
+  const dim3 threads(32, 8);
   const dim3 blocks(
-    (bs + threads.x - 1) / threads.x,
-    (m * m + threads.y - 1) / threads.y
+    (m + threads.x - 1) / threads.x,
+    (m + threads.y - 1) / threads.y,
+    std::min(bs, max_grid_yz)
   );
 
   AT_DISPATCH_FLOATING_TYPES(
@@ -72,6 +81,7 @@ torch::Tensor kernel(
       access_as<int64_t, 1>(ids),
       access_as<c10::complex<scalar_t>, 3>(out)
     );
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
   }));
 
   return out;
