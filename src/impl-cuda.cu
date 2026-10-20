@@ -19,6 +19,7 @@ accessor_t<scalar_t, ndim> access_as(torch::Tensor x) {
 
 #include <vrlsnmr/grid.hh>
 #include <vrlsnmr/kernel/cuda.hh>
+#include <vrlsnmr/kernel_nd/cuda.hh>
 #include <vrlsnmr/xmarginal/cuda.hh>
 #include <vrlsnmr/ymarginal/cuda.hh>
 
@@ -26,4 +27,6 @@ TORCH_LIBRARY_IMPL(vrlsnmr, CUDA, m) {
   m.impl("kernel", vrlsnmr::cuda::kernel);
   m.impl("xmarginal", vrlsnmr::cuda::xmarginal);
   m.impl("ymarginal", vrlsnmr::cuda::ymarginal);
+
+  m.impl("kernel_nd", vrlsnmr::cuda::kernel_nd);
 }
