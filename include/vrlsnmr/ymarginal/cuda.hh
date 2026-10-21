@@ -16,8 +16,8 @@ __global__ void ymarginal(
   const int64_t kmax = out.size(/*dim=*/1);
   const int64_t m = ids.size(/*dim=*/0);
 
-  const int64_t b = blockIdx.x * blockDim.x + threadIdx.x;
-  const int64_t k = blockIdx.y * blockDim.y + threadIdx.y;
+  const int64_t b = static_cast<int64_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+  const int64_t k = static_cast<int64_t>(blockIdx.y) * blockDim.y + threadIdx.y;
 
   if (b < bs && k < kmax) {
     scalar_t sum = 0;
