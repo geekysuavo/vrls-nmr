@@ -3,6 +3,7 @@
 #include <torch/script.h>
 #include <torch/extension.h>
 
+#include <ATen/cuda/CUDAContext.h>
 #include <c10/cuda/CUDAStream.h>
 #include <c10/util/MathConstants.h>
 
@@ -24,6 +25,7 @@ accessor_t<scalar_t, ndim> access_as(torch::Tensor x) {
 #include <vrlsnmr/xmarginal/cuda.hh>
 #include <vrlsnmr/xmarginal_nd/cuda.hh>
 #include <vrlsnmr/ymarginal/cuda.hh>
+#include <vrlsnmr/ymarginal_nd/cuda.hh>
 
 TORCH_LIBRARY_IMPL(vrlsnmr, CUDA, m) {
   m.impl("kernel", vrlsnmr::cuda::kernel);
@@ -32,4 +34,5 @@ TORCH_LIBRARY_IMPL(vrlsnmr, CUDA, m) {
 
   m.impl("kernel_nd", vrlsnmr::cuda::kernel_nd);
   m.impl("xmarginal_nd", vrlsnmr::cuda::xmarginal_nd);
+  m.impl("ymarginal_nd", vrlsnmr::cuda::ymarginal_nd);
 }

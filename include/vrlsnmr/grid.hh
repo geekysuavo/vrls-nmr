@@ -17,7 +17,7 @@ namespace vrlsnmr {
  */
 struct Grid {
   /* maximum number of indirect grid dimensions. */
-  static constexpr int max_ndim = 8;
+  static constexpr int max_ndim = 4;
 
   /* ndim: number of dimensions.
    * size: number of grid points.
@@ -112,6 +112,29 @@ struct Grid {
       /*dim=*/fft_dims
     );
     return (fft.conj() / size).reshape({weights.size(/*dim=*/0), size});
+  }
+
+  /* return a grid with half the size as this one.
+   */
+  Grid half() const {
+    std::vector<int64_t> n_half(ndim);
+    for (int d = 0; d < ndim; ++d)
+      n_half[d] = shape[d] / 2;
+
+    return Grid{n_half};
+  }
+
+  /* call a function that deduces its dimensionality template parameter `Dims`
+   * based on the type of its first argument.
+   */
+  template<int Dims = 1, typename Fn>
+  void dispatch(Fn&& func) const {
+    if constexpr (Dims > max_ndim)
+      throw std::out_of_range{"unsupported indirect dimension count"};
+    else if (ndim == Dims)
+      func(std::integral_constant<int, Dims>{});
+    else
+      dispatch<Dims + 1>(func);
   }
 };
 

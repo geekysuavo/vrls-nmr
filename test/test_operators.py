@@ -99,12 +99,17 @@ def test_xmarginal(tensors):
     assert xmarginal.gt(0).all()
 
 
-def test_ymarginal(tensors):
+@pytest.mark.parametrize("windowed", [False, True])
+def test_ymarginal(tensors, windowed):
     (ids, _, w, refs) = tensors
     (ref_kernel, _, ref_ymarginal) = refs
 
+    if windowed:
+        n = ref_ymarginal.size(dim=1) // 2
+        ref_ymarginal = ref_ymarginal.narrow(dim=1, start=0, length=n)
+
     kernel_inv = torch.linalg.inv(ref_kernel)
-    ymarginal = op.ymarginal(kernel_inv, w, ids)
+    ymarginal = op.ymarginal(kernel_inv, w, ids, windowed)
 
     torch.testing.assert_close(ymarginal, ref_ymarginal, rtol=1e-6, atol=1e-6)
     assert ymarginal.gt(0).all()

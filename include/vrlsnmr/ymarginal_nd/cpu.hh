@@ -7,6 +7,7 @@ namespace impl {
 template<typename scalar_t>
 void ymarginal_nd(
   const Grid grid,
+  const Grid grid_out,
   const accessor_t<c10::complex<scalar_t>, 4> kernel_inv,
   const accessor_t<c10::complex<scalar_t>, 2> coeffs,
   const accessor_t<int64_t, 2> ids,
@@ -18,10 +19,10 @@ void ymarginal_nd(
 
   #pragma omp parallel for collapse(2)
   for (int64_t b = 0; b < bs; ++b) {
-    for (int64_t k = 0; k < grid.size; ++k) {
+    for (int64_t k = 0; k < grid_out.size; ++k) {
       int64_t index[Grid::max_ndim];
-      for (int d = 0; d < grid.ndim; ++d)
-        index[d] = (k / grid.stride[d]) % grid.shape[d];
+      for (int d = 0; d < grid_out.ndim; ++d)
+        index[d] = (k / grid_out.stride[d]) % grid_out.shape[d];
 
       scalar_t sum = 0;
 
@@ -56,24 +57,28 @@ void ymarginal_nd(
 /* kernel_inv: (bs, c, m, m), where c=2^(d-1)
  * weights: (bs, n_1, ..., n_d)
  * ids: (m, d)
- * out => (bs, n_1, ..., n_d)
+ * out => (bs, n_1, ..., n_d) or (bs, n_1 / 2, ..., n_d / 2)
  */
 torch::Tensor ymarginal_nd(
   const torch::Tensor& kernel_inv,
   const torch::Tensor& weights,
-  const torch::Tensor& ids
+  const torch::Tensor& ids,
+  const bool windowed
 ) {
   const Grid grid{weights};
+  const Grid grid_out = windowed ? grid.half() : grid;
+
   const int64_t bs = weights.size(/*dim=*/0);
 
   auto coeffs = grid.make_coeffs(weights);
-  auto out = torch::empty({bs, grid.size}, /*options=*/weights.options());
+  auto out = torch::empty({bs, grid_out.size}, /*options=*/weights.options());
 
   AT_DISPATCH_FLOATING_TYPES(
     weights.scalar_type(),
     "ymarginal_nd", ([&] {
     impl::ymarginal_nd<scalar_t>(
       grid,
+      grid_out,
       access_as<c10::complex<scalar_t>, 4>(kernel_inv),
       access_as<c10::complex<scalar_t>, 2>(coeffs),
       access_as<int64_t, 2>(ids),
@@ -81,7 +86,13 @@ torch::Tensor ymarginal_nd(
     );
   }));
 
-  return out.view(weights.sizes());
+  std::vector<int64_t> shape{weights.sizes().vec()};
+  if (windowed) {
+    for (int d = 0; d < grid.ndim; ++d)
+      shape[d + 1] = shape[d + 1] / 2;
+  }
+
+  return out.view(shape);
 }
 
 } /* namespace vrlsnmr::cpu */

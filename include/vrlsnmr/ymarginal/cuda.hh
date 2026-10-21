@@ -11,14 +11,15 @@ __global__ void ymarginal(
   const accessor_t<int64_t, 1> ids,
   accessor_t<scalar_t, 2> out
 ) {
-  const int bs = coeffs.size(/*dim=*/0);
-  const int n = coeffs.size(/*dim=*/1);
-  const int m = ids.size(/*dim=*/0);
+  const int64_t bs = coeffs.size(/*dim=*/0);
+  const int64_t n = coeffs.size(/*dim=*/1);
+  const int64_t kmax = out.size(/*dim=*/1);
+  const int64_t m = ids.size(/*dim=*/0);
 
-  const int b = blockIdx.x * blockDim.x + threadIdx.x;
-  const int k = blockIdx.y * blockDim.y + threadIdx.y;
+  const int64_t b = blockIdx.x * blockDim.x + threadIdx.x;
+  const int64_t k = blockIdx.y * blockDim.y + threadIdx.y;
 
-  if (b < bs && k < n) {
+  if (b < bs && k < kmax) {
     scalar_t sum = 0;
 
     for (int i = 0; i < m; ++i) {
@@ -42,24 +43,26 @@ __global__ void ymarginal(
 /* kernel_inv: (b, m, m)
  * weights: (b, n)
  * ids: (m,)
- * out => (b, n)
+ * out => (b, n) or (b, n / 2)
  */
 torch::Tensor ymarginal(
   const torch::Tensor& kernel_inv,
   const torch::Tensor& weights,
-  const torch::Tensor& ids
+  const torch::Tensor& ids,
+  const bool windowed
 ) {
   const int64_t bs = weights.size(/*dim=*/0);
   const int64_t n = weights.size(/*dim=*/1);
+  const int64_t n_out = windowed ? n / 2 : n;
 
   const auto coeffs = torch::fft::fft(weights.reciprocal()).conj() / n;
-  auto out = torch::empty({bs, n}, /*options=*/weights.options());
+  auto out = torch::empty({bs, n_out}, /*options=*/weights.options());
 
   auto stream = c10::cuda::getCurrentCUDAStream();
   const dim3 threads(32, 32);
   const dim3 blocks(
     (bs + threads.x - 1) / threads.x,
-    (n + threads.y - 1) / threads.y
+    (n_out + threads.y - 1) / threads.y
   );
 
   AT_DISPATCH_FLOATING_TYPES(

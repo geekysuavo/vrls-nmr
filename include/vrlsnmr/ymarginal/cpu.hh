@@ -13,11 +13,12 @@ void ymarginal(
 ) {
   const int64_t bs = coeffs.size(/*dim=*/0);
   const int64_t n = coeffs.size(/*dim=*/1);
+  const int64_t kmax = out.size(/*dim=*/1);
   const int64_t m = ids.size(/*dim=*/0);
 
   #pragma omp parallel for collapse(2)
   for (int64_t b = 0; b < bs; ++b) {
-    for (int64_t k = 0; k < n; ++k) {
+    for (int64_t k = 0; k < kmax; ++k) {
       scalar_t sum = 0;
 
       for (int64_t i = 0; i < m; ++i) {
@@ -42,18 +43,20 @@ void ymarginal(
 /* kernel_inv: (bs, m, m)
  * weights: (bs, n)
  * ids: (m,)
- * out => (bs, n)
+ * out => (bs, n) or (bs, n / 2)
  */
 torch::Tensor ymarginal(
   const torch::Tensor& kernel_inv,
   const torch::Tensor& weights,
-  const torch::Tensor& ids
+  const torch::Tensor& ids,
+  const bool windowed
 ) {
   const int64_t bs = weights.size(/*dim=*/0);
   const int64_t n = weights.size(/*dim=*/1);
+  const int64_t n_out = windowed ? n / 2 : n;
 
   const auto coeffs = torch::fft::fft(weights.reciprocal()).conj() / n;
-  auto out = torch::empty({bs, n}, /*options=*/weights.options());
+  auto out = torch::empty({bs, n_out}, /*options=*/weights.options());
 
   AT_DISPATCH_FLOATING_TYPES(
     weights.scalar_type(),

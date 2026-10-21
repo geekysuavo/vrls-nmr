@@ -50,7 +50,12 @@ def xmarginal(kernel_inv: Tensor, weights: Tensor, ids: Tensor) -> Tensor:
         return torch.ops.vrlsnmr.xmarginal_nd(kernel_inv, weights, ids)
 
 
-def ymarginal(kernel_inv: Tensor, weights: Tensor, ids: Tensor) -> Tensor:
+def ymarginal(
+    kernel_inv: Tensor,
+    weights: Tensor,
+    ids: Tensor,
+    windowed: bool = False,
+) -> Tensor:
     r"""
     Compute time-domain marginal variances.
 
@@ -58,15 +63,18 @@ def ymarginal(kernel_inv: Tensor, weights: Tensor, ids: Tensor) -> Tensor:
         kernel_inv: :math:`(b, m, m)` or :math:`(b, c, m, m)`, Inverse kernel matrix.
         weights: :math:`(b, n)` or :math:`(b, n_1, \dots, n_d)`, Spectral weights.
         ids: :math:`(m)` or :math:`(m, d)`, Measurement indices.
+        windowed: When true, return the leading-edge corner of the variances.
 
     Returns:
-        :math:`(b, n)` or :math:`(b, n_1, \dots, n_d)`,
+        - When windowed: :math:`(b, n / 2)` or :math:`(b, n_1 / 2, \dots, n_d / 2)`,
+        Time-domain marginal variances.
+        - Otherwise: :math:`(b, n)` or :math:`(b, n_1, \dots, n_d)`,
         Time-domain marginal variances.
     """
     if ids.ndim == 1:
-        return torch.ops.vrlsnmr.ymarginal(kernel_inv, weights, ids)
+        return torch.ops.vrlsnmr.ymarginal(kernel_inv, weights, ids, windowed)
     else:
-        return torch.ops.vrlsnmr.ymarginal_nd(kernel_inv, weights, ids)
+        return torch.ops.vrlsnmr.ymarginal_nd(kernel_inv, weights, ids, windowed)
 
 
 def schedpg(
