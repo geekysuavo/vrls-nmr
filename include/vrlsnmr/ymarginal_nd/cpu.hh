@@ -87,10 +87,8 @@ torch::Tensor ymarginal_nd(
   }));
 
   std::vector<int64_t> shape{weights.sizes().vec()};
-  if (windowed) {
-    for (int d = 0; d < grid.ndim; ++d)
-      shape[d + 1] = shape[d + 1] / 2;
-  }
+  for (int d = 0; d < grid_out.ndim; ++d)
+    shape[d + 1] = grid_out.shape[d];
 
   return out.view(shape);
 }
