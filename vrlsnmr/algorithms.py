@@ -112,20 +112,21 @@ def vrls(
     ids: Tensor,
     tau: float,
     xi: float,
-    n: int,
+    n: int | tuple[int, ...],
     niter: int,
     eps: float = 1.0e-9,
     warm_start: bool | Tensor = False,
 ) -> AlgorithmReturnType:
-    """
+    r"""
     Basic VRLS.
 
     Args:
-        y: :math:(m)` or :math:`(b, m)`, Measurements (complex).
-        ids: :math:`(m)`, Measurement indices.
+        y: :math:(m)`, :math:`(c, m)`, :math:`(b, m)` or :math:`(b, c, m)`,
+            Measurements (complex or multicomplex).
+        ids: :math:`(m)` or :math:`(m, d)`, Measurement indices.
         tau: Fixed noise precision.
         xi: Fixed weight scale.
-        n: Sparse dimension size.
+        n: Sparse dimension size or shape.
         niter: Number of iterations.
         eps: Weight update positivity parameter.
         warm_start: Optional initial weights, or whether to return final weights.
@@ -133,31 +134,31 @@ def vrls(
     Returns:
         A :class:`tuple` containing
 
-        - :math:`(b, n)`, Frequency-domain mean (complex).
-        - :math:`(b, n)`, Frequency-domain variance (real, positive).
-        - :math:`(b, n)`, Time-domain mean (complex).
-        - :math:`(b, n)`, Time-domain variance (real, positive).
-        - :math:`(b, n)`, Frequency-domain weights (real, positive), only returned
+        - :math:`(b, n)` or :math:`(b, c, n_1, \dots, n_d)`,
+          Frequency-domain mean (complex or multicomplex).
+        - :math:`(b, n)` or :math:`(b, n_1, \dots, n_d)`,
+          Frequency-domain variance (real, positive).
+        - :math:`(b, n)` or :math:`(b, c, n_1, \dots, n_d)`,
+          Time-domain mean (complex or multicomplex).
+        - :math:`(b, n)` or :math:`(b, n_1, \dots, n_d)`,
+          Time-domain variance (real, positive).
+        - :math:`(b, n)` or :math:`(b, n_1, \dots, n_d)`,
+          Frequency-domain weights (real, positive), only returned
           when :attr:`warm_start` is true or a tensor.
     """
     device = y.device
     complex_dtype = y.dtype
     real_dtype = y.dtype.to_real()
 
-    if y.ndim == 1:
-        y = y.unsqueeze(dim=0)
-
-    bs = y.size(dim=0)
-
-    flat_ids = md.ravel_ids(ids, shape=n)
-    mu = torch.zeros((bs, n), dtype=complex_dtype, device=device)
+    (y, flat_ids, shape, grid, bs, multidim) = _prepare(y, ids, n)
+    mu = torch.zeros(shape, dtype=complex_dtype, device=device)
     tau_batched = torch.full((bs,), tau, dtype=real_dtype, device=device)
 
     if torch.is_tensor(warm_start):
         w = warm_start
         return_weights = True
     else:
-        w = torch.ones((bs, n), dtype=real_dtype, device=device)
+        w = torch.ones((bs, *grid), dtype=real_dtype, device=device)
         return_weights = warm_start
 
     for _ in range(niter):
@@ -170,11 +171,15 @@ def vrls(
 
         gamma_diag = op.xmarginal(kernel_inv, w, ids)
 
-        m2 = mu.abs().square() + gamma_diag
+        m2 = mx.abs(mu, square=True) + gamma_diag
         w = (xi / (m2 + eps)).sqrt()
 
     yhat = mx.fftn(mu, inverse=True)
     sigma_diag = op.ymarginal(kernel_inv, w, ids)
+
+    if multidim:
+        mu = mx.to_states(mu)
+        yhat = mx.to_states(yhat)
 
     if return_weights:
         return (mu, gamma_diag, yhat, sigma_diag, w)
