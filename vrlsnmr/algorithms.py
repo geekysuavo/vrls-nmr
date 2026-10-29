@@ -193,20 +193,21 @@ def vrls_ex(
     ids: Tensor,
     beta_tau: float,
     beta_xi: float,
-    n: int,
+    n: int | tuple[int, ...],
     niter: int,
     eps: float = 1.0e-9,
     warm_start: bool | Tensor = False,
 ) -> AlgorithmReturnType:
-    """
+    r"""
     Extended VRLS.
 
     Args:
-        y: :math:`(m)` or :math:`(b, m)`, Measurements (complex).
-        ids: :math:`(m)`, Measurement indices.
+        y: :math:`(m)`, :math:`(c, m)`, :math:`(b, m)` or :math:`(b, c, m)`,
+            Measurements (complex or multicomplex).
+        ids: :math:`(m)` or :math:`(m, d)`, Measurement indices.
         beta_tau: Prior scale parameter for noise precision.
         beta_xi: Prior scale parameter for weight scale.
-        n: Sparse dimension size.
+        n: Sparse dimension size or shape.
         niter: Number of iterations.
         eps: Weight update positivity parameter.
         warm_start: Optional initial weights, or whether to return final weights.
@@ -214,24 +215,27 @@ def vrls_ex(
     Returns:
         A :class:`tuple` containing
 
-        - :math:`(b, n)`, Frequency-domain mean (complex).
-        - :math:`(b, n)`, Frequency-domain variance (real, positive).
-        - :math:`(b, n)`, Time-domain mean (complex).
-        - :math:`(b, n)`, Time-domain variance (real, positive).
-        - :math:`(b, n)`, Frequency-domain weights (real, positive), only returned
+        - :math:`(b, n)` or :math:`(b, c, n_1, \dots, n_d)`,
+          Frequency-domain mean (complex or multicomplex).
+        - :math:`(b, n)` or :math:`(b, n_1, \dots, n_d)`,
+          Frequency-domain variance (real, positive).
+        - :math:`(b, n)` or :math:`(b, c, n_1, \dots, n_d)`,
+          Time-domain mean (complex or multicomplex).
+        - :math:`(b, n)` or :math:`(b, n_1, \dots, n_d)`,
+          Time-domain variance (real, positive).
+        - :math:`(b, n)` or :math:`(b, n_1, \dots, n_d)`,
+          Frequency-domain weights (real, positive), only returned
           when :attr:`warm_start` is true or a tensor.
     """
     device = y.device
     complex_dtype = y.dtype
     real_dtype = y.dtype.to_real()
 
-    if y.ndim == 1:
-        y = y.unsqueeze(dim=0)
+    (y, flat_ids, shape, grid, bs, multidim) = _prepare(y, ids, n)
+    var_scale = mx.channels(len(grid)) / math.prod(grid)
+    as_nu_w = (bs,) + (1,) * len(grid)
 
-    bs = y.size(dim=0)
-
-    flat_ids = md.ravel_ids(ids, shape=n)
-    mu = torch.zeros((bs, n), dtype=complex_dtype, device=device)
+    mu = torch.zeros(shape, dtype=complex_dtype, device=device)
     nu_tau = torch.ones((bs,), dtype=real_dtype, device=device)
     nu_xi = torch.ones((bs,), dtype=real_dtype, device=device)
 
@@ -239,7 +243,7 @@ def vrls_ex(
         nu_w = warm_start
         return_weights = True
     else:
-        nu_w = torch.ones((bs, n), dtype=real_dtype, device=device)
+        nu_w = torch.ones((bs, *grid), dtype=real_dtype, device=device)
         return_weights = warm_start
 
     for _ in range(niter):
@@ -253,15 +257,21 @@ def vrls_ex(
         gamma_diag = op.xmarginal(kernel_inv, nu_w, ids)
         sigma_diag = op.ymarginal(kernel_inv, nu_w, ids)
 
-        m2 = mu.abs().square() + gamma_diag
-        nu_w = (nu_xi.unsqueeze(dim=-1) / (m2 + eps)).sqrt()
+        m2 = mx.abs(mu, square=True) / mx.channels(len(grid)) + gamma_diag
+        nu_w = (nu_xi.view(as_nu_w) / (m2 + eps)).sqrt()
 
-        nu_xi = (beta_xi / nu_w.reciprocal().sum(dim=-1)).sqrt()
+        nu_xi = (beta_xi / nu_w.reciprocal().flatten(start_dim=1).sum(dim=-1)).sqrt()
 
         yhat = mx.fftn(mu, inverse=True)
-        err = (y - yhat[:, ids]).abs().square().sum(dim=-1)
-        ess = err + sigma_diag[:, ids].sum(dim=-1) / n
+        err = (y - md.gather(yhat, flat_ids, n)).abs().square()
+        err = err.flatten(start_dim=1).sum(dim=-1)
+        var = md.gather(sigma_diag, flat_ids, n).sum(dim=-1)
+        ess = err + var * var_scale
         nu_tau = (beta_tau / ess).sqrt()
+
+    if multidim:
+        mu = mx.to_states(mu)
+        yhat = mx.to_states(yhat)
 
     if return_weights:
         return (mu, gamma_diag, yhat, sigma_diag, nu_w)
