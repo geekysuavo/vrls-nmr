@@ -75,7 +75,12 @@ class Signal(nn.Module):
         self.register_buffer("decayrates", decayrates)
         self.register_buffer("phases", phases)
 
-    def forward(self, t: float | Tensor, *, noise: float = 0.0) -> Tensor:
+    def forward(  # ty: ignore[invalid-mutable-override]
+        self,
+        t: float | Tensor,
+        *,
+        noise: float = 0.0,
+    ) -> Tensor:
         """
         Simulate measurement at a given time.
 

@@ -19,19 +19,19 @@ dev = [
     { include-group = "test" },
 ]
 lint = [
-    "ruff>=0.17.0",
-    "ty>=0.0.86",
+    "ruff>=0.17.3",
+    "ty>=0.0.94",
 ]
 notebooks = [
-    "marimo>=0.25.1",
+    "marimo>=0.25.2",
     "matplotlib>=3.11.2",
-    "numpy>=2.5.3",
-    "pandas>=3.0.6",
+    "numpy>=2.5.4",
+    "pandas>=3.1.0",
     "seaborn>=0.13.2",
 ]
 test = [
-    "numpy>=2.5.3",
-    "pytest>=9.1.1",
+    "numpy>=2.5.4",
+    "pytest>=9.2.0",
 ]
 
 [build-system]
