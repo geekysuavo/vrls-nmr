@@ -150,7 +150,7 @@ def vrls(
     complex_dtype = y.dtype
     real_dtype = y.dtype.to_real()
 
-    (y, flat_ids, shape, grid, bs, multidim) = _prepare(y, ids, n)
+    (y, flat_ids, bs, nch, grid, shape, multidim) = _prepare(y, ids, n)
     mu = torch.zeros(shape, dtype=complex_dtype, device=device)
     tau_batched = torch.full((bs,), tau, dtype=real_dtype, device=device)
 
@@ -171,7 +171,7 @@ def vrls(
 
         gamma_diag = op.xmarginal(kernel_inv, w, ids)
 
-        m2 = mx.abs(mu, square=True) + gamma_diag
+        m2 = mx.abs(mu, square=True) / nch + gamma_diag
         w = (xi / (m2 + eps)).sqrt()
 
     yhat = mx.fftn(mu, inverse=True)
@@ -231,8 +231,8 @@ def vrls_ex(
     complex_dtype = y.dtype
     real_dtype = y.dtype.to_real()
 
-    (y, flat_ids, shape, grid, bs, multidim) = _prepare(y, ids, n)
-    var_scale = mx.channels(len(grid)) / math.prod(grid)
+    (y, flat_ids, bs, nch, grid, shape, multidim) = _prepare(y, ids, n)
+    var_scale = nch / math.prod(grid)
     as_nu_w = (bs,) + (1,) * len(grid)
 
     mu = torch.zeros(shape, dtype=complex_dtype, device=device)
@@ -257,7 +257,7 @@ def vrls_ex(
         gamma_diag = op.xmarginal(kernel_inv, nu_w, ids)
         sigma_diag = op.ymarginal(kernel_inv, nu_w, ids)
 
-        m2 = mx.abs(mu, square=True) / mx.channels(len(grid)) + gamma_diag
+        m2 = mx.abs(mu, square=True) / nch + gamma_diag
         nu_w = (nu_xi.view(as_nu_w) / (m2 + eps)).sqrt()
 
         nu_xi = (beta_xi / nu_w.reciprocal().flatten(start_dim=1).sum(dim=-1)).sqrt()
@@ -323,7 +323,7 @@ def vrls_mf(
     complex_dtype = y.dtype
     real_dtype = y.dtype.to_real()
 
-    (y, flat_ids, shape, grid, bs, multidim) = _prepare(y, ids, n)
+    (y, flat_ids, bs, nch, grid, shape, multidim) = _prepare(y, ids, n)
     mu = torch.zeros(shape, dtype=complex_dtype, device=device)
     gamma = torch.ones((bs, *grid), dtype=real_dtype, device=device)
 
@@ -338,7 +338,7 @@ def vrls_mf(
     lipschitz = 1
 
     for _ in range(niter):
-        m2 = mx.abs(mu, square=True) + gamma
+        m2 = mx.abs(mu, square=True) / nch + gamma
         w = (xi / (m2 + eps)).sqrt()
 
         delta = mx.fftn(mu, inverse=True)
@@ -396,7 +396,7 @@ def ists(
     device = y.device
     complex_dtype = y.dtype
 
-    (y, flat_ids, shape, grid, bs, multidim) = _prepare(y, ids, n)
+    (y, flat_ids, bs, _, grid, shape, multidim) = _prepare(y, ids, n)
     xhat = torch.zeros(shape, dtype=complex_dtype, device=device)
     yhat = torch.zeros(shape, dtype=complex_dtype, device=device)
     delta = torch.zeros(shape, dtype=complex_dtype, device=device)
@@ -432,7 +432,7 @@ def _prepare(
     y: Tensor,
     ids: Tensor,
     n: int | tuple[int, ...],
-) -> tuple[Tensor, Tensor, tuple[int, ...], tuple[int, ...], int, bool]:
+) -> tuple[Tensor, Tensor, int, int, tuple[int, ...], tuple[int, ...], bool]:
     """
     Prepare data for reconstruction.
 
@@ -446,9 +446,10 @@ def _prepare(
 
         - Batched measurements.
         - Flattened indices.
-        - Full tensor shape.
-        - Grid tensor subshape.
         - Batch size.
+        - Channel count.
+        - Grid tensor subshape.
+        - Full tensor shape.
         - True when multidimensional.
     """
     multidim = md.is_multidim(n)
@@ -458,9 +459,12 @@ def _prepare(
     bs = y.size(dim=0)
     flat_ids = md.ravel_ids(ids, n)
     grid = n if isinstance(n, tuple) else (n,)
+    nch = mx.channels(len(grid))
+
     if multidim:
-        shape = (bs, mx.channels(len(grid)), *grid)
+        shape = (bs, nch, *grid)
+        y = mx.to_complex(y)
     else:
         shape = (bs, *grid)
 
-    return (y, flat_ids, shape, grid, bs, multidim)
+    return (y, flat_ids, bs, nch, grid, shape, multidim)

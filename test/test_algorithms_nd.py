@@ -84,7 +84,7 @@ def test_vrls_ex(split):
     (k, m, n) = (10, 90, (10, 10))
     stdev = 0.01
     niter = 10
-    tau = 1.0e9
+    tau = 1.0e6
     xi = tau
 
     (y, ids) = build_instance(k=k, m=m, n=n, stdev=stdev)
