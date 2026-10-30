@@ -102,6 +102,23 @@ def gather(data: Tensor, flat_ids: Tensor, shape: int | tuple[int, ...]) -> Tens
     return data.flatten(start_dim).index_select(dim=-1, index=flat_ids)
 
 
+def roll(data: Tensor, shape: int | tuple[int, ...]) -> Tensor:
+    r"""
+    Return the rolled version of frequency-domain data.
+
+    Args:
+        data: :math:`(\dots, n_1, \dots, n_d)`, Input data.
+        shape: :math:`d`, Grid sizes along each dimension.
+
+    Returns:
+        :math:`(\dots, n_1, \dots, n_d)`, Rolled data.
+    """
+    grid_ndim = len(shape) if isinstance(shape, tuple) else 1
+    dims = tuple(-(index + 1) for index in range(grid_ndim))
+    shifts = tuple(data.size(dim) // 2 for dim in dims)
+    return data.roll(shifts, dims=dims)
+
+
 def narrow(data: Tensor, shape: int | tuple[int, ...]) -> Tensor:
     r"""
     Return the leading corner of the input data.
@@ -122,18 +139,17 @@ def narrow(data: Tensor, shape: int | tuple[int, ...]) -> Tensor:
     return data
 
 
-def roll(data: Tensor, shape: int | tuple[int, ...]) -> Tensor:
-    r"""
-    Return the rolled version of frequency-domain data.
+def narrow_shape(shape: int | tuple[int, ...]) -> int | tuple[int, ...]:
+    """
+    Return the shape produced by :func:`narrow`.
 
     Args:
-        data: :math:`(\dots, n_1, \dots, n_d)`, Input data.
-        shape: :math:`d`, Grid sizes along each dimension.
+        shape: :math:`d`, Grid sizes before narrowing.
 
     Returns:
-        :math:`(\dots, n_1, \dots, n_d)`, Rolled data.
+        :math:`d`, Grid sizes after narrowing.
     """
-    grid_ndim = len(shape) if isinstance(shape, tuple) else 1
-    dims = tuple(-(index + 1) for index in range(grid_ndim))
-    shifts = tuple(data.size(dim) // 2 for dim in dims)
-    return data.roll(shifts, dims=dims)
+    if isinstance(shape, int):
+        return shape // 2
+    else:
+        return tuple(size // 2 for size in shape)

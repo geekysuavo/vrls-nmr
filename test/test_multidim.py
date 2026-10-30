@@ -82,18 +82,6 @@ def test_scatter_gather(prefix_shape, grid_shape, scalar_shape):
     assert torch.equal(dense == scatter_data, mask)
 
 
-def test_narrow_1d(prefix_shape, grid_size):
-    data = torch.randn(*prefix_shape, grid_size)
-    narrow = md.narrow(data, shape=(grid_size,))
-    assert narrow.shape == (*prefix_shape, grid_size // 2)
-
-
-def test_narrow_nd(prefix_shape, grid_shape):
-    data = torch.randn(*prefix_shape, *grid_shape)
-    narrow = md.narrow(data, shape=grid_shape)
-    assert narrow.shape == (*prefix_shape, *(size // 2 for size in grid_shape))
-
-
 def test_roll_1d(prefix_shape, grid_size):
     data = torch.randn(*prefix_shape, grid_size)
     roll = md.roll(data, shape=(grid_size,))
@@ -104,3 +92,19 @@ def test_roll_nd(prefix_shape, grid_shape):
     data = torch.randn(*prefix_shape, *grid_shape)
     roll = md.roll(data, shape=grid_shape)
     assert roll.shape == data.shape
+
+
+def test_narrow_1d(prefix_shape, grid_size):
+    data = torch.randn(*prefix_shape, grid_size)
+    narrow = md.narrow(data, shape=(grid_size,))
+    narrow_size = md.narrow_shape(grid_size)
+    assert narrow.shape == (*prefix_shape, narrow_size)
+    assert narrow_size == grid_size // 2
+
+
+def test_narrow_nd(prefix_shape, grid_shape):
+    data = torch.randn(*prefix_shape, *grid_shape)
+    narrow = md.narrow(data, shape=grid_shape)
+    narrow_shape = md.narrow_shape(grid_shape)
+    assert narrow.shape == (*prefix_shape, *narrow_shape)
+    assert narrow_shape == tuple(size // 2 for size in grid_shape)
