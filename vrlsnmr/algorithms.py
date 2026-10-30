@@ -21,19 +21,21 @@ from vrlsnmr.types import (
 )
 
 
-def ans(
+def ans(  # noqa: C901
     model: AlgorithmFunc,
     measure: MeasurementFunc,
-    m_initial: int,
+    *,
+    m_initial: int | Tensor,
     m_final: int,
-    n_initial: int,
-    n_final: int,
+    n_initial: int | tuple[int, ...],
+    n_final: int | tuple[int, ...],
     min_sparsity: float,
     warm_start: bool = False,
     callback: CallbackFunc | None = None,
+    device: torch.device | None = None,
     **kwargs: bool | float,
 ) -> SamplerReturnType:
-    """
+    r"""
     Active nonuniform sampling (ANS).
 
     Args:
@@ -42,40 +44,73 @@ def ans(
             See :func:`vrls` for a candidate function.
         measure: Measurement function accepting a grid point to observe
             and returning a :math:`(1)` or :math:`(b, 1)` complex tensor.
-        m_initial: Initial number of (uniform) measurements.
+        m_initial: Initial number of (uniform) measurements, or an initial
+            tensor of measurement indices.
         m_final: Final (total) number of measurements.
         n_initial: Initial (minimum) Fourier grid size.
         n_final: Final (maximum) Fourier grid size.
         min_sparsity: Minimum sparsity maintained for :attr:`model`.
         warm_start: When true, model weights are carried between steps.
         callback: Optional function to call at the end of each step.
+        device: Device to place initial index tensors onto.
         kwargs: Keyword arguments passed to :attr:`model`.
 
     Returns:
         A :class:`tuple` containing
 
-        - :math:`(b, m)`, Time-domain measurements (complex).
-        - :math:`(m)`, Time-domain measurement indices.
-        - :math:`(b, n)`, Frequency-domain mean (complex).
-        - :math:`(b, n)`, Frequency-domain variance (real, positive).
-        - :math:`(b, n)`, Time-domain mean (complex).
-        - :math:`(b, n)`, Time-domain variance (real, positive).
+        - :math:`(b, m)` or :math:`(b, c, m)`,
+          Time-domain measurements (complex or multicomplex).
+        - :math:`(m)` or :math:`(m, d)`,
+          Time-domain measurement indices.
+        - :math:`(b, n)` or :math:`(b, c, n_1, \dots, n_d)`,
+          Frequency-domain mean (complex or multicomplex).
+        - :math:`(b, n)` or :math:`(b, n_1, \dots, n_d)`,
+          Frequency-domain variance (real, positive).
+        - :math:`(b, n / 2)` or :math:`(b, c, n_1 / 2, \dots, n_d / 2)`,
+          Time-domain mean (complex or multicomplex).
+        - :math:`(b, n / 2)` or :math:`(b, n_1 / 2, \dots, n_d / 2)`,
+          Time-domain variance (real, positive).
     """
 
-    def adapt_size(m_next: int, n_prev: int) -> int:
+    def adapt_size_1d(m_next: int, n_prev: int) -> int:
         n_next = n_prev
+        assert isinstance(n_final, int)
         while n_next < n_final and m_next / n_next >= min_sparsity:
             n_next *= 2
         return n_next
 
-    y = torch.cat([measure(t) for t in range(m_initial)], dim=-1)
-    ids = torch.arange(m_initial, device=y.device)
+    def adapt_size_nd(m_next: int, n_prev: tuple[int, ...]) -> tuple[int, ...]:
+        n_next = n_prev
+        assert isinstance(n_final, tuple)
+        while (
+            any(n < nf for n, nf in zip(n_next, n_final))
+            and m_next / math.prod(n_next) >= min_sparsity
+        ):
+            n_next = tuple(min(2 * n, nf) for n, nf in zip(n_next, n_final))
+        return n_next
+
+    def adapt_size(m_next: int, n_prev: int | tuple[int, ...]) -> int | tuple[int, ...]:
+        if isinstance(n_prev, int):
+            return adapt_size_1d(m_next, n_prev)
+        else:
+            return adapt_size_nd(m_next, n_prev)
+
+    if torch.is_tensor(m_initial):
+        ids = m_initial
+        device = ids.device
+        m_initial = ids.size(dim=0)
+    else:
+        grid_ndim = len(n_initial) if isinstance(n_initial, tuple) else 1
+        ids_per_dim = [torch.arange(m_initial // grid_ndim, device=device)]
+        ids = torch.cartesian_prod(*ids_per_dim)
+
     (m, n) = (m_initial, n_initial)
+    y = measure(ids)
 
     w = True
     state = None
     while m < m_final:
-        m = ids.numel()
+        m = ids.size(dim=0)
         n = adapt_size(m, n)
 
         if warm_start:
@@ -84,19 +119,19 @@ def ans(
         else:
             (mu, gamma_diag, yhat, sigma_diag) = model(y, ids, n=n, **kwargs)
 
-        mu = mu.roll(n // 2, dims=1)
-        gamma_diag = gamma_diag.roll(n // 2, dims=1)
+        mu = md.roll(mu, n)
+        gamma_diag = md.roll(gamma_diag, n)
 
-        yhat = yhat.narrow(dim=1, start=0, length=n // 2)
-        sigma_diag = sigma_diag.narrow(dim=1, start=0, length=n // 2)
+        objective = sigma_diag.sum(dim=0).flatten().clone()
+        flat_ids = md.ravel_ids(ids, n)
+        objective[flat_ids] = 0
 
-        objective = sigma_diag.sum(dim=0).clone()
-        objective[ids] = 0
+        next_flat_index = objective.argmax(keepdim=True)
+        next_index = md.unravel_ids(next_flat_index, n)
 
-        next_index = objective.argmax(keepdim=True)
-        y_next = measure(int(next_index.item()))
-        ids = torch.cat((ids, next_index))
+        y_next = measure(next_index)
         y = torch.cat((y, y_next), dim=-1)
+        ids = torch.cat((ids, next_index))
 
         state = (y, ids, mu, gamma_diag, yhat, sigma_diag)
         if callback is not None:
@@ -138,9 +173,9 @@ def vrls(
           Frequency-domain mean (complex or multicomplex).
         - :math:`(b, n)` or :math:`(b, n_1, \dots, n_d)`,
           Frequency-domain variance (real, positive).
-        - :math:`(b, n)` or :math:`(b, c, n_1, \dots, n_d)`,
+        - :math:`(b, n / 2)` or :math:`(b, c, n_1 / 2, \dots, n_d / 2)`,
           Time-domain mean (complex or multicomplex).
-        - :math:`(b, n)` or :math:`(b, n_1, \dots, n_d)`,
+        - :math:`(b, n / 2)` or :math:`(b, n_1 / 2, \dots, n_d / 2)`,
           Time-domain variance (real, positive).
         - :math:`(b, n)` or :math:`(b, n_1, \dots, n_d)`,
           Frequency-domain weights (real, positive), only returned
@@ -174,8 +209,8 @@ def vrls(
         m2 = mx.abs(mu, square=True) / nch + gamma_diag
         w = (xi / (m2 + eps)).sqrt()
 
-    yhat = mx.fftn(mu, inverse=True)
-    sigma_diag = op.ymarginal(kernel_inv, w, ids)
+    yhat = md.narrow(mx.fftn(mu, inverse=True), n)
+    sigma_diag = op.ymarginal(kernel_inv, w, ids, windowed=True)
 
     if multidim:
         mu = mx.to_states(mu)
@@ -219,9 +254,9 @@ def vrls_ex(
           Frequency-domain mean (complex or multicomplex).
         - :math:`(b, n)` or :math:`(b, n_1, \dots, n_d)`,
           Frequency-domain variance (real, positive).
-        - :math:`(b, n)` or :math:`(b, c, n_1, \dots, n_d)`,
+        - :math:`(b, n / 2)` or :math:`(b, c, n_1 / 2, \dots, n_d / 2)`,
           Time-domain mean (complex or multicomplex).
-        - :math:`(b, n)` or :math:`(b, n_1, \dots, n_d)`,
+        - :math:`(b, n / 2)` or :math:`(b, n_1 / 2, \dots, n_d / 2)`,
           Time-domain variance (real, positive).
         - :math:`(b, n)` or :math:`(b, n_1, \dots, n_d)`,
           Frequency-domain weights (real, positive), only returned
@@ -269,6 +304,9 @@ def vrls_ex(
         ess = err + var * var_scale
         nu_tau = (beta_tau / ess).sqrt()
 
+    yhat = md.narrow(yhat, n)
+    sigma_diag = md.narrow(sigma_diag, n)
+
     if multidim:
         mu = mx.to_states(mu)
         yhat = mx.to_states(yhat)
@@ -311,9 +349,9 @@ def vrls_mf(
           Frequency-domain mean (complex or multicomplex).
         - :math:`(b, n)` or :math:`(b, n_1, \dots, n_d)`,
           Frequency-domain variance (real, positive).
-        - :math:`(b, n)` or :math:`(b, c, n_1, \dots, n_d)`,
+        - :math:`(b, n / 2)` or :math:`(b, c, n_1 / 2, \dots, n_d / 2)`,
           Time-domain mean (complex or multicomplex).
-        - :math:`(b, n)` or :math:`(b, n_1, \dots, n_d)`,
+        - :math:`(b, n / 2)` or :math:`(b, n_1 / 2, \dots, n_d / 2)`,
           Time-domain variance (real, positive).
         - :math:`(b, n)` or :math:`(b, n_1, \dots, n_d)`,
           Frequency-domain weights (real, positive), only returned
@@ -352,9 +390,9 @@ def vrls_mf(
 
         gamma = (tau * ata_diag + w).reciprocal()
 
-    yhat = mx.fftn(mu, inverse=True)
     grid_dims = tuple(range(1, gamma.ndim))
-    sigma = gamma.mean(dim=grid_dims, keepdim=True).expand_as(gamma)
+    yhat = md.narrow(mx.fftn(mu, inverse=True), n)
+    sigma = md.narrow(gamma.mean(dim=grid_dims, keepdim=True).expand_as(gamma), n)
 
     if multidim:
         mu = mx.to_states(mu)

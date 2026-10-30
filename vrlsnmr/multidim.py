@@ -45,7 +45,7 @@ def ravel_ids(ids: Tensor, shape: int | tuple[int, ...]) -> Tensor:
     return flat_ids
 
 
-def unravel_ids(flat_ids: Tensor, shape: tuple[int, ...]) -> Tensor:
+def unravel_ids(flat_ids: Tensor, shape: int | tuple[int, ...]) -> Tensor:
     """
     Convert flattened indices into multidimensional grid indices.
 
@@ -57,6 +57,7 @@ def unravel_ids(flat_ids: Tensor, shape: tuple[int, ...]) -> Tensor:
         :math:`(m, d)`, Multidimensional indices.
     """
     if is_multidim(shape):
+        assert isinstance(shape, tuple)
         ids = torch.stack(torch.unravel_index(flat_ids, shape), dim=-1)
         return ids.to(flat_ids.dtype)
     else:
@@ -99,3 +100,40 @@ def gather(data: Tensor, flat_ids: Tensor, shape: int | tuple[int, ...]) -> Tens
     grid_ndim = len(shape) if isinstance(shape, tuple) else 1
     start_dim = data.ndim - grid_ndim
     return data.flatten(start_dim).index_select(dim=-1, index=flat_ids)
+
+
+def narrow(data: Tensor, shape: int | tuple[int, ...]) -> Tensor:
+    r"""
+    Return the leading corner of the input data.
+
+    Args:
+        data: :math:`(\dots, n_1, \dots, n_d)`, Input data.
+        shape: :math:`d`, Grid sizes along each dimension.
+
+    Returns:
+        :math:`(\dots, n_1 / 2, \dots, n_d / 2)`, Narrowed data.
+    """
+    grid_ndim = len(shape) if isinstance(shape, tuple) else 1
+    for index in range(grid_ndim):
+        dim = -(index + 1)
+        length = data.size(dim) // 2
+        data = data.narrow(dim, start=0, length=length)
+
+    return data
+
+
+def roll(data: Tensor, shape: int | tuple[int, ...]) -> Tensor:
+    r"""
+    Return the rolled version of frequency-domain data.
+
+    Args:
+        data: :math:`(\dots, n_1, \dots, n_d)`, Input data.
+        shape: :math:`d`, Grid sizes along each dimension.
+
+    Returns:
+        :math:`(\dots, n_1, \dots, n_d)`, Rolled data.
+    """
+    grid_ndim = len(shape) if isinstance(shape, tuple) else 1
+    dims = tuple(-(index + 1) for index in range(grid_ndim))
+    shifts = tuple(data.size(dim) // 2 for dim in dims)
+    return data.roll(shifts, dims=dims)

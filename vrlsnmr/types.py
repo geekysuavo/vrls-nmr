@@ -13,5 +13,5 @@ type AlgorithmReturnType = (
 )
 type SamplerReturnType = tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]
 type AlgorithmFunc = Callable[..., AlgorithmReturnType]
-type MeasurementFunc = Callable[[int], Tensor]
+type MeasurementFunc = Callable[[Tensor], Tensor]
 type CallbackFunc = Callable[[SamplerReturnType], None]

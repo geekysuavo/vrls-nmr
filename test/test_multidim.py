@@ -14,12 +14,16 @@ def prefix_shape(request) -> tuple[int, ...]:
     return tuple(map(int, request.param.split("x")))
 
 
-@pytest.fixture(params=("6", "4x8", "3x4x5", "3x2x4x7"))
+@pytest.fixture(params=(4, 12))
+def grid_size(request) -> int:
+    return request.param
+
+
+@pytest.fixture(params=("6", "4x8", "6x4x8", "2x2x4x8"))
 def grid_shape(request) -> tuple[int, ...]:
     return tuple(map(int, request.param.split("x")))
 
 
-@pytest.mark.parametrize("grid_size", [4, 12])
 def test_index_conversion_1d(grid_size):
     num_values = grid_size // 2
 
@@ -76,3 +80,27 @@ def test_scatter_gather(prefix_shape, grid_shape, scalar_shape):
     mask[flat_ids] = True
     mask = mask.expand(*prefix_shape, num_grid_elements).view_as(dense)
     assert torch.equal(dense == scatter_data, mask)
+
+
+def test_narrow_1d(prefix_shape, grid_size):
+    data = torch.randn(*prefix_shape, grid_size)
+    narrow = md.narrow(data, shape=(grid_size,))
+    assert narrow.shape == (*prefix_shape, grid_size // 2)
+
+
+def test_narrow_nd(prefix_shape, grid_shape):
+    data = torch.randn(*prefix_shape, *grid_shape)
+    narrow = md.narrow(data, shape=grid_shape)
+    assert narrow.shape == (*prefix_shape, *(size // 2 for size in grid_shape))
+
+
+def test_roll_1d(prefix_shape, grid_size):
+    data = torch.randn(*prefix_shape, grid_size)
+    roll = md.roll(data, shape=(grid_size,))
+    assert roll.shape == data.shape
+
+
+def test_roll_nd(prefix_shape, grid_shape):
+    data = torch.randn(*prefix_shape, *grid_shape)
+    roll = md.roll(data, shape=grid_shape)
+    assert roll.shape == data.shape

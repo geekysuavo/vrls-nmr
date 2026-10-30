@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.19.6"
+__generated_with = "0.25.2"
 app = marimo.App(width="medium")
 
 
@@ -15,6 +15,7 @@ def _():
 
     import vrlsnmr.algorithms as algo
     import vrlsnmr.simulators as sim
+
     return Path, algo, partial, plt, sim, torch
 
 
@@ -37,7 +38,13 @@ def _(partial, sim, torch):
 
 
 @app.cell
-def _(algo, ground_truth, partial):
+def _(ground_truth):
+    device = next(ground_truth.buffers()).device
+    return (device,)
+
+
+@app.cell
+def _(algo, device, ground_truth, partial):
     sigma = 0.1
     tau = 1 / sigma**2
     xi = tau
@@ -54,6 +61,7 @@ def _(algo, ground_truth, partial):
         tau=tau,
         xi=xi,
         niter=niter,
+        device=device,
     )
 
     y.squeeze_(dim=0)
@@ -109,7 +117,7 @@ def _(ground_truth, ids, n_td, plt, sigma_diag, torch, y, yhat):
         alpha=0.1,
         color="grey",
     )
-    plt.plot(t, ground_truth(t.cuda()).real[0].cpu(), alpha=0.2)
+    plt.plot(t, ground_truth(t.cuda()).real.cpu(), alpha=0.2)
     plt.plot(t, yhat.real.cpu(), c="red", alpha=0.2)
     plt.scatter(ids.cpu(), y.real.cpu(), c="orange", s=10)
     return
