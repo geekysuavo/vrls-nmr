@@ -98,12 +98,13 @@ def ans(  # noqa: C901
     if torch.is_tensor(m_initial):
         ids = m_initial
         device = ids.device
-        m_initial = ids.size(dim=0)
     else:
         grid_ndim = len(n_initial) if isinstance(n_initial, tuple) else 1
-        ids_per_dim = [torch.arange(m_initial // grid_ndim, device=device)]
+        m_per_dim = max(1, round(m_initial ** (1 / grid_ndim)))
+        ids_per_dim = [torch.arange(m_per_dim, device=device)] * grid_ndim
         ids = torch.cartesian_prod(*ids_per_dim)
 
+    m_initial = ids.size(dim=0)
     (m, n) = (m_initial, n_initial)
     y = measure(ids)
 
@@ -122,12 +123,14 @@ def ans(  # noqa: C901
         mu = md.roll(mu, n)
         gamma_diag = md.roll(gamma_diag, n)
 
+        n_td = md.narrow_shape(n)
+        flat_ids = md.ravel_ids(ids, n_td)
         objective = sigma_diag.sum(dim=0).flatten().clone()
-        flat_ids = md.ravel_ids(ids, n)
         objective[flat_ids] = 0
+        del flat_ids
 
         next_flat_index = objective.argmax(keepdim=True)
-        next_index = md.unravel_ids(next_flat_index, n)
+        next_index = md.unravel_ids(next_flat_index, n_td)
 
         y_next = measure(next_index)
         y = torch.cat((y, y_next), dim=-1)
