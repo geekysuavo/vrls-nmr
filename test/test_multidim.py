@@ -98,6 +98,7 @@ def test_narrow_1d(prefix_shape, grid_size):
     data = torch.randn(*prefix_shape, grid_size)
     narrow = md.narrow(data, shape=(grid_size,))
     narrow_size = md.narrow_shape(grid_size)
+    assert isinstance(narrow_size, int)
     assert narrow.shape == (*prefix_shape, narrow_size)
     assert narrow_size == grid_size // 2
 
@@ -106,5 +107,6 @@ def test_narrow_nd(prefix_shape, grid_shape):
     data = torch.randn(*prefix_shape, *grid_shape)
     narrow = md.narrow(data, shape=grid_shape)
     narrow_shape = md.narrow_shape(grid_shape)
+    assert isinstance(narrow_shape, tuple)
     assert narrow.shape == (*prefix_shape, *narrow_shape)
     assert narrow_shape == tuple(size // 2 for size in grid_shape)
