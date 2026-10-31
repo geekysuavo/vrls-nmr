@@ -14,14 +14,15 @@ def _():
     import torch.nn.functional as F
 
     import vrlsnmr.algorithms as algo
+    import vrlsnmr.gridsizes as gsize
     import vrlsnmr.simulators as sim
 
-    return Path, algo, partial, plt, sim, torch
+    return Path, algo, gsize, partial, plt, sim, torch
 
 
 @app.cell
 def _(partial, sim, torch):
-    torch.random.manual_seed(1729)
+    torch.random.manual_seed(17295)
 
     ground_truth = sim.Signal.build(
         num_components=8,
@@ -44,7 +45,7 @@ def _(ground_truth):
 
 
 @app.cell
-def _(algo, device, ground_truth, partial):
+def _(algo, device, ground_truth, gsize, partial):
     sigma = 0.1
     tau = 1 / sigma**2
     xi = tau
@@ -53,11 +54,11 @@ def _(algo, device, ground_truth, partial):
     (y, ids, mu, gamma_diag, yhat, sigma_diag) = algo.ans(
         model=algo.vrls,
         measure=partial(ground_truth, noise=sigma),
+        adapt_size=gsize.Doubled(n_final=2048, min_sparsity=0.1),
         m_initial=16,
         m_final=64,
         n_initial=64,
         n_final=2048,
-        min_sparsity=0.1,
         tau=tau,
         xi=xi,
         niter=niter,

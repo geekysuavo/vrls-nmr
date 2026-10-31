@@ -2,6 +2,7 @@
 
 # Standard
 import math
+from typing import overload
 
 # Third party
 import torch
@@ -12,6 +13,9 @@ import vrlsnmr.multicomplex as mx
 import vrlsnmr.multidim as md
 import vrlsnmr.operators as op
 from vrlsnmr.types import (
+    AdaptSizeFunc,
+    AdaptSizeIntFunc,
+    AdaptSizeTupleFunc,
     AlgorithmFunc,
     AlgorithmReturnType,
     CallbackFunc,
@@ -21,15 +25,49 @@ from vrlsnmr.types import (
 )
 
 
-def ans(  # noqa: C901
+@overload
+def ans(
     model: AlgorithmFunc,
     measure: MeasurementFunc,
+    adapt_size: AdaptSizeIntFunc,
+    *,
+    m_initial: int | Tensor,
+    m_final: int,
+    n_initial: int,
+    n_final: int,
+    warm_start: bool = False,
+    callback: CallbackFunc | None = None,
+    device: torch.device | None = None,
+    **kwargs: bool | float,
+) -> SamplerReturnType: ...
+
+
+@overload
+def ans(
+    model: AlgorithmFunc,
+    measure: MeasurementFunc,
+    adapt_size: AdaptSizeTupleFunc,
+    *,
+    m_initial: int | Tensor,
+    m_final: int,
+    n_initial: tuple[int, ...],
+    n_final: tuple[int, ...],
+    warm_start: bool = False,
+    callback: CallbackFunc | None = None,
+    device: torch.device | None = None,
+    **kwargs: bool | float,
+) -> SamplerReturnType: ...
+
+
+def ans(
+    model: AlgorithmFunc,
+    measure: MeasurementFunc,
+    adapt_size: AdaptSizeFunc,
     *,
     m_initial: int | Tensor,
     m_final: int,
     n_initial: int | tuple[int, ...],
     n_final: int | tuple[int, ...],
-    min_sparsity: float,
     warm_start: bool = False,
     callback: CallbackFunc | None = None,
     device: torch.device | None = None,
@@ -44,12 +82,15 @@ def ans(  # noqa: C901
             See :func:`vrls` for a candidate function.
         measure: Measurement function accepting a grid point to observe
             and returning a :math:`(1)` or :math:`(b, 1)` complex tensor.
+            See :class:`vrlsnmr.simulators.Signal` for a candidate function.
+        adapt_size: Grid size adaptation function accepting the current
+            number of measurements and grid size, and returning a new grid size.
+            See :class:`vrlsnmr.gridsizes.PowerOfTwo` for a candidate function.
         m_initial: Initial number of (uniform) measurements, or an initial
             tensor of measurement indices.
         m_final: Final (total) number of measurements.
         n_initial: Initial (minimum) Fourier grid size.
         n_final: Final (maximum) Fourier grid size.
-        min_sparsity: Minimum sparsity maintained for :attr:`model`.
         warm_start: When true, model weights are carried between steps.
         callback: Optional function to call at the end of each step.
         device: Device to place initial index tensors onto.
@@ -71,30 +112,6 @@ def ans(  # noqa: C901
         - :math:`(b, n / 2)` or :math:`(b, n_1 / 2, \dots, n_d / 2)`,
           Time-domain variance (real, positive).
     """
-
-    def adapt_size_1d(m_next: int, n_prev: int) -> int:
-        n_next = n_prev
-        assert isinstance(n_final, int)
-        while n_next < n_final and m_next / n_next >= min_sparsity:
-            n_next *= 2
-        return n_next
-
-    def adapt_size_nd(m_next: int, n_prev: tuple[int, ...]) -> tuple[int, ...]:
-        n_next = n_prev
-        assert isinstance(n_final, tuple)
-        while (
-            any(n < nf for n, nf in zip(n_next, n_final))
-            and m_next / math.prod(n_next) >= min_sparsity
-        ):
-            n_next = tuple(min(2 * n, nf) for n, nf in zip(n_next, n_final))
-        return n_next
-
-    def adapt_size(m_next: int, n_prev: int | tuple[int, ...]) -> int | tuple[int, ...]:
-        if isinstance(n_prev, int):
-            return adapt_size_1d(m_next, n_prev)
-        else:
-            return adapt_size_nd(m_next, n_prev)
-
     if torch.is_tensor(m_initial):
         ids = m_initial
         device = ids.device
@@ -112,7 +129,7 @@ def ans(  # noqa: C901
     state = None
     while m < m_final:
         m = ids.size(dim=0)
-        n = adapt_size(m, n)
+        n = adapt_size(m, n)  # ty: ignore[invalid-argument-type]
 
         if warm_start:
             _out = model(y, ids, n=n, warm_start=w, **kwargs)

@@ -15,3 +15,7 @@ type SamplerReturnType = tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]
 type AlgorithmFunc = Callable[..., AlgorithmReturnType]
 type MeasurementFunc = Callable[[Tensor], Tensor]
 type CallbackFunc = Callable[[SamplerReturnType], None]
+
+type AdaptSizeIntFunc = Callable[[int, int], int]
+type AdaptSizeTupleFunc = Callable[[int, tuple[int, ...]], tuple[int, ...]]
+type AdaptSizeFunc = AdaptSizeIntFunc | AdaptSizeTupleFunc
