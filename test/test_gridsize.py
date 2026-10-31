@@ -1,3 +1,7 @@
+# Standard
+import math
+import random
+
 # Third party
 import pytest
 
@@ -89,3 +93,26 @@ def test_doubled_small(m, n_prev, n_next):
 def test_scaled_all(m, n_prev, n_next):
     adapt_size = gs.ScaledAll(n_final=(10, 20), min_sparsity=0.2)
     assert adapt_size(m, n_prev) == n_next
+
+
+@pytest.mark.parametrize("repeat", list(range(10)))
+@pytest.mark.parametrize("ndim", [2, 3])
+@pytest.mark.parametrize("cls", [gs.DoubledAll, gs.DoubledSmall, gs.ScaledAll])
+def test_output_properties(cls, ndim, repeat):
+    sizes = (2, 4, 8, 12, 16, 24, 32, 64)
+
+    rng = random.Random(repeat * 3 + 1)
+    min_sparsity = rng.choice([0.01, 0.05, 0.2])
+    n_final = tuple(rng.choice(sizes[2:]) for _ in range(ndim))
+    n_prev = tuple(rng.choice([n for n in sizes if n <= nf]) for nf in n_final)
+    m = rng.randint(1, 2560)
+
+    adapt = cls(n_final, min_sparsity)
+    n_next = adapt(m, n_prev)
+
+    assert all(np <= n <= nf for np, n, nf in zip(n_prev, n_next, n_final))
+    assert all(n % 2 == 0 for np, n in zip(n_prev, n_next) if n != np)
+    if m / math.prod(n_prev) < min_sparsity:
+        assert n_next == n_prev
+    else:
+        assert m / math.prod(n_next) >= min_sparsity
