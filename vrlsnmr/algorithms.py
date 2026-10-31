@@ -85,7 +85,7 @@ def ans(
             See :class:`vrlsnmr.simulators.Signal` for a candidate function.
         adapt_size: Grid size adaptation function accepting the current
             number of measurements and grid size, and returning a new grid size.
-            See :class:`vrlsnmr.gridsizes.PowerOfTwo` for a candidate function.
+            See :class:`vrlsnmr.gridsizes.Doubled` for a candidate function.
         m_initial: Initial number of (uniform) measurements, or an initial
             tensor of measurement indices.
         m_final: Final (total) number of measurements.
@@ -529,7 +529,7 @@ def _prepare(
 
 def _resize_weights(w: bool | Tensor, n_next: int | tuple[int, ...]) -> bool | Tensor:
     """
-    Resize a tensor of weights by interpolating inverse variance.
+    Resize a tensor of weights by interpolating variance (inverse squared weight).
 
     Args:
         w: Weight tensor, or a boolean flag in case of the first iteration.
@@ -558,8 +558,8 @@ def _resize_weights(w: bool | Tensor, n_next: int | tuple[int, ...]) -> bool | T
         shape[dim] = next_size
         fractions = (positions - lower_ends).to(w.dtype).view(shape)
 
-        invar_lower = w.index_select(dim, index=lower_ends % prev_size).pow(-2)
-        invar_upper = w.index_select(dim, index=(lower_ends + 1) % prev_size).pow(-2)
-        w = ((1 - fractions) * invar_lower + fractions * invar_upper).pow(-0.5)
+        var_lower = w.index_select(dim, index=lower_ends % prev_size).pow(-2)
+        var_upper = w.index_select(dim, index=(lower_ends + 1) % prev_size).pow(-2)
+        w = ((1 - fractions) * var_lower + fractions * var_upper).pow(-0.5)
 
     return w
