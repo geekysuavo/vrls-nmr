@@ -61,8 +61,9 @@ def _(algo, device, ground_truth, gsize, partial):
         n_final=2048,
         tau=tau,
         xi=xi,
-        niter=niter,
+        niter=1,
         device=device,
+        warm_start=True,
     )
 
     y.squeeze_(dim=0)

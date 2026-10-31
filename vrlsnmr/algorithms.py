@@ -132,6 +132,7 @@ def ans(
         n = adapt_size(m, n)  # ty: ignore[invalid-argument-type]
 
         if warm_start:
+            w = _resize_weights(w, n)
             _out = model(y, ids, n=n, warm_start=w, **kwargs)
             (mu, gamma_diag, yhat, sigma_diag, w) = _out
         else:
@@ -526,3 +527,41 @@ def _prepare(
         shape = (bs, *grid)
 
     return (y, flat_ids, bs, nch, grid, shape, multidim)
+
+
+def _resize_weights(w: bool | Tensor, n_next: int | tuple[int, ...]) -> bool | Tensor:
+    """
+    Resize a tensor of weights by interpolating inverse variance.
+
+    Args:
+        w: Weight tensor, or a boolean flag in case of the first iteration.
+        n_next: Grid size or shape to resize the weights into.
+
+    Returns:
+        Resized weights or the input boolean value passed through.
+    """
+    if isinstance(w, bool):
+        return w
+
+    n_prev = tuple(w.shape[1:])
+    n_next = n_next if isinstance(n_next, tuple) else (n_next,)
+
+    for index, (prev_size, next_size) in enumerate(zip(n_prev, n_next)):
+        if prev_size == next_size:
+            continue
+
+        dim = w.ndim + index - len(n_prev)
+        ids = torch.arange(next_size, device=w.device)
+        shifted_ids = torch.where(ids < next_size // 2, ids, ids - next_size)
+        positions = shifted_ids.to(w.dtype) * (prev_size / next_size)
+        lower_ends = positions.floor().long()
+
+        shape = [1] * w.ndim
+        shape[dim] = next_size
+        fractions = (positions - lower_ends).to(w.dtype).view(shape)
+
+        invar_lower = w.index_select(dim, index=lower_ends % prev_size).pow(-2)
+        invar_upper = w.index_select(dim, index=(lower_ends + 1) % prev_size).pow(-2)
+        w = ((1 - fractions) * invar_lower + fractions * invar_upper).pow(-0.5)
+
+    return w
