@@ -40,12 +40,14 @@ def test_scaled(m, n_prev, n_next):
 @pytest.mark.parametrize(
     ("m", "n_prev", "n_next"),
     [
-        pytest.param(10, (5, 5), (10, 10), id="10-5x5-10x10"),
-        pytest.param(10, (4, 5), (8, 10), id="10-4x5-8x10"),
+        pytest.param(10, (2, 2), (4, 4), id="10-5x5-5x5"),
+        pytest.param(10, (4, 5), (4, 5), id="10-4x5-4x5"),
+        pytest.param(10, (10, 5), (10, 5), id="10-10x5-10x5"),
         pytest.param(10, (10, 10), (10, 10), id="10-10x10-10x10"),
-        pytest.param(20, (10, 10), (10, 20), id="20-10x10-10x20"),
+        pytest.param(20, (10, 10), (10, 10), id="20-10x10-10x10"),
         pytest.param(20, (10, 20), (10, 20), id="20-10x20-10x20"),
-        pytest.param(20, (10, 2), (10, 16), id="20-10x2-10x16"),
+        pytest.param(20, (10, 2), (10, 8), id="20-10x2-10x8"),
+        pytest.param(40, (10, 10), (10, 20), id="40-10x10-10x20"),
     ],
 )
 def test_doubled_all(m, n_prev, n_next):
@@ -56,13 +58,14 @@ def test_doubled_all(m, n_prev, n_next):
 @pytest.mark.parametrize(
     ("m", "n_prev", "n_next"),
     [
-        pytest.param(10, (5, 5), (10, 10), id="10-5x5-10x10"),
-        pytest.param(10, (4, 5), (8, 10), id="10-4x5-8x10"),
-        pytest.param(10, (10, 5), (10, 10), id="10-10x5-10x10"),
+        pytest.param(10, (5, 5), (10, 5), id="10-5x5-10x5"),
+        pytest.param(10, (4, 5), (8, 5), id="10-4x5-8x5"),
+        pytest.param(10, (10, 5), (10, 5), id="10-10x5-10x5"),
         pytest.param(10, (10, 10), (10, 10), id="10-10x10-10x10"),
-        pytest.param(20, (10, 10), (10, 20), id="20-10x10-10x20"),
+        pytest.param(20, (10, 10), (10, 10), id="20-10x10-10x10"),
         pytest.param(20, (10, 20), (10, 20), id="20-10x20-10x20"),
-        pytest.param(20, (10, 2), (10, 16), id="20-10x2-10x16"),
+        pytest.param(20, (10, 2), (10, 8), id="20-10x2-10x8"),
+        pytest.param(40, (10, 10), (10, 20), id="40-10x10-10x20"),
     ],
 )
 def test_doubled_small(m, n_prev, n_next):
@@ -73,12 +76,14 @@ def test_doubled_small(m, n_prev, n_next):
 @pytest.mark.parametrize(
     ("m", "n_prev", "n_next"),
     [
-        pytest.param(10, (5, 5), (5, 10), id="10-5x5-10x10"),
-        pytest.param(10, (4, 5), (4, 10), id="10-4x5-8x10"),
+        pytest.param(10, (5, 5), (5, 10), id="10-5x5-5x10"),
+        pytest.param(10, (4, 5), (4, 12), id="10-4x5-4x12"),
+        pytest.param(10, (10, 5), (10, 5), id="10-10x5-10x5"),
         pytest.param(10, (10, 10), (10, 10), id="10-10x10-10x10"),
-        pytest.param(20, (10, 10), (10, 14), id="20-10x10-10x20"),
+        pytest.param(20, (10, 10), (10, 10), id="20-10x10-10x10"),
         pytest.param(20, (10, 20), (10, 20), id="20-10x20-10x20"),
-        pytest.param(20, (10, 2), (10, 14), id="20-10x2-10x14"),
+        pytest.param(20, (10, 2), (10, 10), id="20-10x2-10x10"),
+        pytest.param(40, (10, 10), (10, 20), id="40-10x10-10x20"),
     ],
 )
 def test_scaled_all(m, n_prev, n_next):

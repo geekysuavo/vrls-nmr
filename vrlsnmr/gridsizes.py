@@ -48,13 +48,36 @@ class ScaledAll:
 
     def __call__(self, m: int, n_prev: tuple[int, ...]) -> tuple[int, ...]:
         """Adapt the grid shape."""
+        n_next = list(n_prev)
         ndim = len(self.n_final)
-        n_total = math.prod(self.n_final)
-        scale = (m / (self.min_sparsity * n_total)) ** (1 / ndim)
-        n_next = tuple(2 * int(scale * nf / 2) for nf in self.n_final)
-        return tuple(
-            max(min(nn, nf), nd) for nn, nd, nf in zip(n_next, n_prev, self.n_final)
-        )
+        free_dims = set(range(ndim))
+        available_size = m / self.min_sparsity
+
+        while free_dims:
+            fixed_dims = set(range(ndim)) - free_dims
+            fixed_size = math.prod(n_next[dim] for dim in fixed_dims)
+            free_size = math.prod(self.n_final[dim] for dim in free_dims)
+            scale = (available_size / fixed_size / free_size) ** (1 / len(free_dims))
+            sizes = {dim: 2 * int(scale * self.n_final[dim] / 2) for dim in free_dims}
+
+            # dims cannot shrink below the current grid size.
+            dims_at_lower = {dim for dim in sizes if sizes[dim] <= n_prev[dim]}
+            if dims_at_lower:
+                free_dims -= dims_at_lower
+                continue
+
+            # dims cannot grow past the final grid size.
+            dims_at_upper = {dim for dim in sizes if sizes[dim] >= self.n_final[dim]}
+            for dim in dims_at_upper:
+                n_next[dim] = self.n_final[dim]
+
+            free_dims -= dims_at_upper
+            if not dims_at_upper:
+                for dim in free_dims:
+                    n_next[dim] = sizes[dim]
+                break
+
+        return tuple(n_next)
 
 
 @dataclass(frozen=True)
@@ -67,11 +90,12 @@ class DoubledAll:
     def __call__(self, m: int, n_prev: tuple[int, ...]) -> tuple[int, ...]:
         """Adapt the grid shape."""
         n = n_prev
-        while (
-            any(nd < nf for nd, nf in zip(n, self.n_final))
-            and m / math.prod(n) >= self.min_sparsity
-        ):
-            n = tuple(min(2 * nd, nf) for nd, nf in zip(n, self.n_final))
+        while any(nd < nf for nd, nf in zip(n, self.n_final)):
+            n_next = tuple(min(2 * nd, nf) for nd, nf in zip(n, self.n_final))
+            if m / math.prod(n_next) < self.min_sparsity:
+                break
+            else:
+                n = n_next
 
         return n
 
@@ -86,10 +110,7 @@ class DoubledSmall:
     def __call__(self, m: int, n_prev: tuple[int, ...]) -> tuple[int, ...]:
         """Adapt the grid shape."""
         n = n_prev
-        while (
-            any(nd < nf for nd, nf in zip(n, self.n_final))
-            and m / math.prod(n) >= self.min_sparsity
-        ):
+        while any(nd < nf for nd, nf in zip(n, self.n_final)):
             scalable_dims = tuple(
                 (nd, dim)
                 for dim, (nd, nf) in enumerate(zip(n, self.n_final))
@@ -99,6 +120,10 @@ class DoubledSmall:
 
             n_list = list(n)
             n_list[dim] = min(2 * n_list[dim], self.n_final[dim])
-            n = tuple(n_list)
+            n_next = tuple(n_list)
+            if m / math.prod(n_next) < self.min_sparsity:
+                break
+            else:
+                n = n_next
 
         return n
