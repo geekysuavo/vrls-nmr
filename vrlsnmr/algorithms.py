@@ -121,14 +121,12 @@ def ans(
         ids_per_dim = [torch.arange(m_per_dim, device=device)] * grid_ndim
         ids = torch.cartesian_prod(*ids_per_dim)
 
-    m_initial = ids.size(dim=0)
-    (m, n) = (m_initial, n_initial)
-    y = measure(ids)
-
     w = True
     state = None
-    while m < m_final:
-        m = ids.size(dim=0)
+    n = n_initial
+    y = measure(ids)
+
+    while (m := ids.size(dim=0)) < m_final:
         n = adapt_size(m, n)  # ty: ignore[invalid-argument-type]
 
         if warm_start:
