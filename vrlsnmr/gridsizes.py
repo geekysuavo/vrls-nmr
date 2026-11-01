@@ -3,6 +3,22 @@
 # Standard
 import math
 from dataclasses import dataclass
+from typing import overload
+
+
+@dataclass(frozen=True)
+class Fixed:
+    """Use a fixed grid size."""
+
+    @overload
+    def __call__(self, m: int, n_prev: int) -> int: ...
+
+    @overload
+    def __call__(self, m: int, n_prev: tuple[int, ...]) -> tuple[int, ...]: ...
+
+    def __call__(self, m: int, n_prev: int | tuple[int, ...]) -> int | tuple[int, ...]:
+        """Return the input grid size."""
+        return n_prev
 
 
 @dataclass(frozen=True)
