@@ -186,8 +186,8 @@ class Signal(nn.Module):
             num_replicas: :math:`b`, Number of signal replicas (batch size).
             num_dimensions: :math:`d`, Number of signal dimensions.
             with_direct_dimension: When true, the :math:`b` replicas will be
-                structured to contain the Fourier transform of a simulated
-                direct data dimension.
+                structured to contain the real part of the Fourier transform
+                of a simulated direct data dimension.
             frequencies: Frequency parameter builder function.
             decayrates: Decay rate parameter builder function.
             amplitudes: Amplitude parameter builder function.
@@ -219,14 +219,15 @@ class Signal(nn.Module):
         phase_params = reshape(phases(num_components, num_copies))
 
         if with_direct_dimension:
-            direct_signal = cls(
-                amplitudes=constant(num_components, 1, value=1.0).squeeze(dim=0),
-                frequencies=frequencies(num_components, 1).squeeze(dim=0),
-                decayrates=decayrates(num_components, 1).squeeze(dim=0),
-                phases=phases(num_components, 1).squeeze(dim=0),
+            direct_freq = frequencies(num_components, 1).squeeze(dim=0)
+            direct_decay = decayrates(num_components, 1).squeeze(dim=0)
+            direct_phase = phases(num_components, 1).squeeze(dim=0)
+            t_direct = torch.arange(num_direct).unsqueeze(dim=-1)
+            y = torch.polar(
+                (-direct_decay * t_direct).exp(),
+                2 * math.pi * direct_freq * t_direct + direct_phase,
             )
-            y = direct_signal(torch.arange(num_direct))
-            yft = torch.fft.fft(y, norm="ortho")
+            yft = torch.fft.fft(y, dim=0, norm="ortho")  # (num_direct, k)
 
             linear_ndim = amplitude_params.ndim
             nonlin_ndim = frequency_params.ndim
@@ -236,13 +237,10 @@ class Signal(nn.Module):
             amplitude_params = amplitude_params.expand(1, *linear_shape)
             frequency_params = frequency_params.expand(num_direct, *nonlin_shape)
             decay_params = decay_params.expand(num_direct, *nonlin_shape)
-            phase_params = phase_params.expand(1, *nonlin_shape)
+            phase_params = phase_params.expand(num_direct, *nonlin_shape)
 
-            direct_amplitudes = yft.abs().view(-1, *([1] * linear_ndim))
-            direct_phases = yft.angle().view(-1, *([1] * nonlin_ndim))
-
+            direct_amplitudes = yft.real.reshape(num_direct, *([-1] * linear_ndim))
             amplitude_params = amplitude_params * direct_amplitudes
-            phase_params = phase_params + direct_phases
 
         return cls(amplitude_params, frequency_params, decay_params, phase_params)
 
